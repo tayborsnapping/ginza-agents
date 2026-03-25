@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+
+# Database
+db/ginza.db
+db/ginza.db-wal
+db/ginza.db-shm
+
+# Logs
+logs/
+
+# PM2
+.pm2/
+
+# Build output
+agents/cto-03-dashboard/app/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Claude Code local overrides
+CLAUDE.local.md
+
+# Licensed fonts
+brand/fonts/
