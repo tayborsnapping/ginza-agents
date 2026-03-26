@@ -2,6 +2,8 @@
 // Fetches orders and product costs from Shopify, computes per-category gross margins.
 // Note: Shopify line items don't carry product_type — we build a lookup from the products API.
 // Note: Cost-per-item lives on the InventoryItem, not the variant — we batch-fetch via inventoryItem.list().
+// Note: Cost is keyed by variant_id (not product_id) because multi-variant products
+//       (e.g. box vs. pack) have different costs per variant.
 
 import { getOrders, getProducts } from '../../shared/shopify.js';
 import ShopifyApi from 'shopify-api-node';
@@ -19,13 +21,12 @@ function getShopifyClient() {
 }
 
 /**
- * Fetch all products and build two lookup maps:
+ * Fetch all products and build lookup maps:
  *   - productTypeMap: product_id → product_type (for categorizing order line items)
- *   - inventoryItemIds: array of inventory_item_id values (for cost lookup)
- *   - variantToProduct: inventory_item_id → product_id (for joining cost back)
+ *   - costsByVariant: variant_id → cost (for accurate per-variant COGS)
  *
- * Then batch-fetch InventoryItems to get cost-per-item.
- * Returns { costsByProduct, productTypeMap, totalProducts, missingCostCount }
+ * Batch-fetches InventoryItems to get cost-per-item, keyed by variant_id.
+ * Returns { costsByVariant, productTypeMap, totalProducts, missingCostCount }
  *
  * @param {object} ctx - Runner context
  */
@@ -35,16 +36,18 @@ export async function pullProductCosts(ctx) {
   const products = await getProducts();
   ctx.log(`Fetched ${products.length} products`);
 
-  const productTypeMap = {};      // product_id → product_type
-  const invItemToProduct = {};    // inventory_item_id → product_id
+  const productTypeMap = {};        // product_id → product_type
+  const invItemToVariant = {};      // inventory_item_id → variant_id
   const allInvItemIds = [];
+  let totalVariants = 0;
 
   for (const product of products) {
     productTypeMap[product.id] = product.product_type || 'Uncategorized';
 
     for (const variant of product.variants || []) {
+      totalVariants++;
       if (variant.inventory_item_id) {
-        invItemToProduct[variant.inventory_item_id] = product.id;
+        invItemToVariant[variant.inventory_item_id] = variant.id;
         allInvItemIds.push(variant.inventory_item_id);
       }
     }
@@ -52,11 +55,10 @@ export async function pullProductCosts(ctx) {
 
   // Batch-fetch inventory items in chunks of 100 (Shopify API limit)
   const shopify = getShopifyClient();
-  const costsByProduct = {};
-  let missingCostCount = 0;
+  const costsByVariant = {};        // variant_id → cost
   const CHUNK_SIZE = 100;
 
-  ctx.log(`Fetching cost data for ${allInvItemIds.length} inventory items`);
+  ctx.log(`Fetching cost data for ${allInvItemIds.length} inventory items (${totalVariants} variants)`);
 
   for (let i = 0; i < allInvItemIds.length; i += CHUNK_SIZE) {
     const chunk = allInvItemIds.slice(i, i + CHUNK_SIZE);
@@ -67,14 +69,11 @@ export async function pullProductCosts(ctx) {
       });
 
       for (const item of items) {
-        const productId = invItemToProduct[item.id];
+        const variantId = invItemToVariant[item.id];
         const cost = item.cost ? parseFloat(item.cost) : null;
 
-        if (productId && cost && cost > 0) {
-          // If multiple variants, use the first cost found
-          if (!costsByProduct[productId]) {
-            costsByProduct[productId] = cost;
-          }
+        if (variantId && cost && cost > 0) {
+          costsByVariant[variantId] = cost;
         }
       }
     } catch (err) {
@@ -82,16 +81,17 @@ export async function pullProductCosts(ctx) {
     }
   }
 
-  // Count products without cost data
+  // Count variants without cost data
+  let missingCostCount = 0;
   for (const product of products) {
-    if (!costsByProduct[product.id]) {
-      missingCostCount++;
-    }
+    // A product is "missing cost" if none of its variants have cost data
+    const hasCost = (product.variants || []).some(v => costsByVariant[v.id]);
+    if (!hasCost) missingCostCount++;
   }
 
-  ctx.log(`Cost data: ${Object.keys(costsByProduct).length} products with cost, ${missingCostCount} missing`);
+  ctx.log(`Cost data: ${Object.keys(costsByVariant).length} variants with cost, ${missingCostCount} products fully missing cost`);
 
-  return { costsByProduct, productTypeMap, totalProducts: products.length, missingCostCount };
+  return { costsByVariant, productTypeMap, totalProducts: products.length, missingCostCount };
 }
 
 /**
@@ -151,19 +151,21 @@ export async function pullCategorySales(ctx, productTypeMap) {
 
 /**
  * Match revenue to COGS by category. Returns the full margin analysis object.
+ * Uses variant_id to match costs (not product_id) so multi-variant products
+ * (box vs. pack) get the correct per-variant cost.
  *
- * @param {object} salesByCategory - From pullCategorySales
- * @param {object} costsByProduct  - From pullProductCosts (map of productId → cost)
- * @param {object} productTypeMap  - product_id → product_type
- * @param {Array}  orders          - Raw orders (to compute per-item COGS)
+ * @param {object} salesByCategory  - From pullCategorySales
+ * @param {object} costsByVariant   - From pullProductCosts (map of variantId → cost)
+ * @param {object} productTypeMap   - product_id → product_type
+ * @param {Array}  orders           - Raw orders (to compute per-item COGS)
  * @param {number} missingCostCount - Products without cost data
  */
-export function calculateMargins(salesByCategory, costsByProduct, productTypeMap, orders, missingCostCount) {
+export function calculateMargins(salesByCategory, costsByVariant, productTypeMap, orders, missingCostCount) {
   const categoryMargins = [];
   let totalRevenue = 0;
   let totalCOGS = 0;
 
-  // Build COGS by category from order line items
+  // Build COGS by category from order line items, using variant_id for cost lookup
   const cogsByCategory = {};
 
   for (const order of orders) {
@@ -171,7 +173,7 @@ export function calculateMargins(salesByCategory, costsByProduct, productTypeMap
 
     for (const item of order.line_items || []) {
       const category = productTypeMap[item.product_id] || 'Uncategorized';
-      const unitCost = costsByProduct[item.product_id] || 0;
+      const unitCost = costsByVariant[item.variant_id] || 0;
       const lineCOGS = unitCost * item.quantity;
 
       if (!cogsByCategory[category]) {

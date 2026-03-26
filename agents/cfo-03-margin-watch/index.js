@@ -19,16 +19,16 @@ await run({
     ctx.log('Starting margin watch — pulling Shopify data');
 
     // Step 1: Pull product data first (need productTypeMap for categorizing orders)
-    const { costsByProduct, productTypeMap, totalProducts, missingCostCount } = await pullProductCosts(ctx);
+    const { costsByVariant, productTypeMap, totalProducts, missingCostCount } = await pullProductCosts(ctx);
 
     // Step 2: Pull sales data (trailing 7 days), using productTypeMap for categories
     const { salesByCategory, orders, orderCount, periodStart, periodEnd } = await pullCategorySales(ctx, productTypeMap);
 
     ctx.log(`Sales: ${Object.keys(salesByCategory).length} categories from ${orderCount} orders`);
-    ctx.log(`Costs: ${Object.keys(costsByProduct).length}/${totalProducts} products have cost data`);
+    ctx.log(`Costs: ${Object.keys(costsByVariant).length} variants with cost data (${totalProducts} products)`);
 
-    // Step 3: Calculate margins
-    const marginData = calculateMargins(salesByCategory, costsByProduct, productTypeMap, orders, missingCostCount);
+    // Step 3: Calculate margins (keyed by variant_id for accurate multi-variant cost matching)
+    const marginData = calculateMargins(salesByCategory, costsByVariant, productTypeMap, orders, missingCostCount);
     marginData.orderCount = orderCount;
     marginData.periodStart = periodStart;
     marginData.periodEnd = periodEnd;
