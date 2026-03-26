@@ -14,7 +14,7 @@ logs/            → Rotated file logs (backup only — primary logging is in DB
 
 ## Key Commands
 ```bash
-pm2 start ecosystem.config.js          # Start all agents
+pm2 start ecosystem.config.cjs          # Start all agents
 pm2 restart <agent-id>                  # Restart specific agent
 pm2 logs <agent-id>                     # Tail agent logs
 node agents/<agent-id>/index.js         # Manual test run
