@@ -15,6 +15,12 @@ export default {
       autorestart: false,
     },
     {
+      name: 'cfo-01-weekly',
+      script: 'agents/cfo-01-weekly-report/index.js',
+      cron_restart: '0 7 * * 1',      // Monday 7:00 AM ET
+      autorestart: false,
+    },
+    {
       name: 'cfo-03-margin',
       script: 'agents/cfo-03-margin-watch/index.js',
       cron_restart: '0 6 * * *',      // Daily 6:00 AM ET
