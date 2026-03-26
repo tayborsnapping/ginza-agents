@@ -35,4 +35,4 @@ Thumbs.db
 CLAUDE.local.md
 
 # Licensed fonts
-brand/fonts/
+# brand/ folder removed — Assets/Brand/ is now the canonical location

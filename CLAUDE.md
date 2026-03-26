@@ -9,7 +9,8 @@ shared/          → Reusable framework (runner, DB, API clients) — ALL agents
 agents/<id>/     → One folder per agent (index.js, prompt.md, tools.js)
 db/              → SQLite schema and database file
 specs/           → Architecture docs, session plans (read before major changes)
-logs/            → Rotated file logs (backup only — primary logging is in DB)
+Assets/Brand/    → Brand reference (BRAND.md, logos, fonts, mockups)
+docs/            → Voice/soul guide, Claude Code skill files, archived session prompts
 ```
 
 ## Key Commands
@@ -39,9 +40,12 @@ sqlite3 db/ginza.db                     # Query shared database
 
 ## Phase 1 Agents (current build)
 CTO-01 (Health Monitor), CTO-03 (Dashboard), CTO-04 (Alerts/Discord Bot),
-COO-01 (Invoice Parser), COO-02 (Shopify Entry), CFO-01 (Weekly Report), CFO-03 (Margin Watch)
+COO-01 (Invoice Parser), COO-02 (Shopify Entry), COO-03 (Descriptions),
+CFO-01 (Weekly Report), CFO-03 (Margin Watch)
 
 ## Reference Docs
 - specs/architecture.md — Full DB schema, runner framework, shared module specs
 - specs/session-plan.md — Build order and per-session scope
+- Assets/Brand/BRAND.md — Colors, typography, logos, dashboard design tokens
+- docs/ginza-voice-SOUL.md — Brand voice and tone guide
 - agents/<id>/prompt.md — Read before modifying any agent

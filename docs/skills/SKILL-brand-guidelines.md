@@ -2,7 +2,7 @@
 
 > **Source of truth:** [Standards.site](https://app.standards.site/g/7b6b5c87613/d/2e9909272f1/v/0e8819836d5/edit) (login: tayborpepper@ginzatcg.com)
 > **Designer:** Orion C. (orionthedesigner@gmail.com)
-> **Voice & tone:** See `Docs/ginza-voice-SOUL.md`
+> **Voice & tone:** See `docs/ginza-voice-SOUL.md`
 
 ---
 
@@ -151,7 +151,7 @@ When creating any branded content (social media, Canva designs, Shopify assets, 
 5. **Text color:** Black `#111111` on light, White `#F8F8F8` on dark
 6. **Background defaults:** White `#F8F8F8` or Black `#111111`
 7. **Accent sparingly:** Gold `#F2B705`, Sky `#0378A6`, Grass `#2C4001`, Tori `#AB2121`
-8. **Tone:** See `Docs/ginza-voice-SOUL.md` — smart, professional, 6/10 humor, 7/10 formality
+8. **Tone:** See `docs/ginza-voice-SOUL.md` — smart, professional, 6/10 humor, 7/10 formality
 
 ### Social Media Dimensions (Standard)
 - Instagram Post: 1080 x 1080px

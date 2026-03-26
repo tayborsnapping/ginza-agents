@@ -14,7 +14,7 @@ Ginza Marketplace's AI C-Suite is a hierarchical multi-agent system. Five parent
 ├── package.json
 ├── .env
 ├── .gitignore
-├── ecosystem.config.js
+├── ecosystem.config.cjs
 │
 ├── shared/
 │   ├── runner.js              # Agent execution framework
@@ -40,8 +40,7 @@ Ginza Marketplace's AI C-Suite is a hierarchical multi-agent system. Five parent
 │   │   └── app/               # React SPA (shadcn/ui, built with Vite)
 │   ├── cto-04-alerts/
 │   │   ├── index.js           # Discord bot (PM2 keeps alive)
-│   │   ├── prompt.md
-│   │   └── tools.js
+│   │   └── prompt.md
 │   ├── coo-01-invoice/
 │   │   ├── index.js
 │   │   ├── prompt.md
@@ -50,8 +49,13 @@ Ginza Marketplace's AI C-Suite is a hierarchical multi-agent system. Five parent
 │   │       ├── southern-hobby.js
 │   │       ├── gts.js
 │   │       ├── peachstate.js
-│   │       └── japanese-imports.js
+│   │       ├── japanese-imports.js
+│   │       └── parse_gts_pdf.py
 │   ├── coo-02-shopify-entry/
+│   │   ├── index.js
+│   │   ├── prompt.md
+│   │   └── tools.js
+│   ├── coo-03-descriptions/
 │   │   ├── index.js
 │   │   ├── prompt.md
 │   │   └── tools.js
@@ -64,11 +68,20 @@ Ginza Marketplace's AI C-Suite is a hierarchical multi-agent system. Five parent
 │       ├── prompt.md
 │       └── tools.js
 │
-├── bot/
-│   └── commands/              # Discord slash commands (future)
-│       └── status.js
+├── Assets/Brand/              # Brand assets (local dev only, not deployed to VPS)
+│   ├── BRAND.md               # Colors, typography, logos, design tokens
+│   ├── Logos/                  # SVG + PNG logo files
+│   ├── Fonts/                  # New Order + Inter font families
+│   └── Applications/           # Mockup PNGs (business card, packaging, etc.)
 │
-└── logs/                      # Rotated file logs (backup)
+├── docs/                       # Reference docs (local dev only, not deployed to VPS)
+│   ├── ginza-voice-SOUL.md    # Brand voice and tone guide
+│   ├── skills/                # Claude Code skill prompts (SKILL-*.md)
+│   └── archive/               # Completed session prompts, audit docs
+│
+└── specs/                      # Architecture and planning docs
+    ├── architecture.md
+    └── session-plan.md
 ```
 
 ---
@@ -251,7 +264,7 @@ Max tokens: 4096 default, configurable per agent.
 File: `ecosystem.config.cjs`
 
 ```javascript
-export default {
+module.exports = {
   apps: [
     // === ALWAYS-ON SERVICES ===
     {
@@ -262,7 +275,8 @@ export default {
     {
       name: 'cto-03-dashboard',
       script: 'agents/cto-03-dashboard/index.js',
-      // Express server — runs continuously
+      // Mission Control dashboard — Express server, always-on
+      env: { DASHBOARD_PORT: '3737' },
     },
 
     // === SCHEDULED AGENTS ===
@@ -281,26 +295,34 @@ export default {
     {
       name: 'cfo-03-margin',
       script: 'agents/cfo-03-margin-watch/index.js',
-      cron_restart: '15 6 * * *',      // Daily 6:15 AM ET (offset from CFO-01)
+      cron_restart: '15 6 * * *',     // Daily 6:15 AM ET
       autorestart: false,
     },
     {
       name: 'coo-01-invoice',
       script: 'agents/coo-01-invoice/index.js',
-      cron_restart: '0 8 * * *',       // Daily 8:00 AM ET
+      cron_restart: '0 8 * * *',      // Daily 8:00 AM ET
       autorestart: false,
     },
     {
       name: 'coo-02-shopify',
       script: 'agents/coo-02-shopify-entry/index.js',
-      // Triggered after COO-01 completes (runner handles this)
+      // Triggered by COO-01 completion (runner.triggerAgent), not cron
       autorestart: false,
+      env: { COO02_DRY_RUN: 'true' },
+    },
+    {
+      name: 'coo-03-descriptions',
+      script: 'agents/coo-03-descriptions/index.js',
+      // Triggered by COO-02 completion (runner.triggerAgent), not cron
+      autorestart: false,
+      env: { COO03_DRY_RUN: 'true' },
     },
   ]
 };
 ```
 
-Note: COO-02 is triggered by COO-01's completion rather than a fixed cron. The runner supports this via a `triggerAgent(agentId)` function that spawns a child process.
+Note: COO-02 is triggered by COO-01's completion and COO-03 by COO-02's completion rather than fixed crons. The runner supports this via a `triggerAgent(agentId)` function that spawns a child process.
 
 ---
 

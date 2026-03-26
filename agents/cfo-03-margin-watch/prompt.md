@@ -63,8 +63,10 @@ Return valid JSON only — no markdown, no commentary outside the JSON:
 ```
 
 # Rules
-- Minimum healthy margin threshold: 30% gross margin
-- Flag "warning" for any category between 0% and 30% margin
+- Default minimum healthy margin threshold: 30% gross margin
+- Category-specific thresholds override the default:
+  - Gachapon: 15% (set COGS offsets shipping costs on Japanese shipments — lower margin is expected and acceptable)
+- Flag "warning" for any category below its threshold (30% default, or the override if one exists)
 - Flag "critical" for any category with negative margin (selling below cost)
 - If a category has zero revenue for the period, note it but don't flag as alert
 - If missing cost data is >20% of products, add a warning about data quality

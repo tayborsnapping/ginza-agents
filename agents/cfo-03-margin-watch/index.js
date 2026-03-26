@@ -7,7 +7,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { run } from '../../shared/runner.js';
 import { parseJSON, stripCodeFences } from '../../shared/utils.js';
-import { pullCategorySales, pullProductCosts, calculateMargins, MARGIN_THRESHOLD } from './tools.js';
+import { pullCategorySales, pullProductCosts, calculateMargins, MARGIN_THRESHOLD, CATEGORY_THRESHOLDS, getThreshold } from './tools.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -72,11 +72,14 @@ await run({
     }
 
     if (warningCategories.length > 0) {
-      const names = warningCategories.map(c => `${c.category} (${c.margin}%)`).join(', ');
+      const names = warningCategories.map(c => {
+        const thresh = getThreshold(c.category) * 100;
+        return `${c.category} (${c.margin}%, threshold ${thresh}%)`;
+      }).join(', ');
       ctx.alert(
         'warning',
         'Low Margin Warning',
-        `Categories below ${MARGIN_THRESHOLD * 100}% threshold: ${names}`
+        `Categories below threshold: ${names}`
       );
       ctx.log(`Warning alert queued: ${names}`);
     }

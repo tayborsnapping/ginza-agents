@@ -7,15 +7,16 @@ set -e
 TARGET="${1:?Usage: bash deploy.sh user@your-vps}"
 
 rsync -av \
-  --exclude='Docs' \
+  --exclude='docs' \
   --exclude='Assets' \
-  --exclude='Skills' \
+  --exclude='specs' \
   --exclude='.env' \
   --exclude='node_modules' \
   --exclude='db/ginza.db' \
   --exclude='db/ginza.db-wal' \
   --exclude='db/ginza.db-shm' \
   --exclude='.git' \
+  --exclude='.claude' \
   --exclude='Credentials' \
   "/Users/tayborpepper/Desktop/Master Ginza Project/" \
   "$TARGET:/home/ginza-agents/"

@@ -34,17 +34,17 @@ If Taybor uploads the PDF directly to the project folder, skip the above and use
 
 ## Step 2: Run the Parser
 
-Use the bundled script at `Skills/scripts/parse_gts_pdf.py`:
+Use the bundled script at `agents/coo-01-invoice/parsers/parse_gts_pdf.py`:
 
 ```bash
 pip install pdfplumber --break-system-packages -q
-python3 "Skills/scripts/parse_gts_pdf.py" path/to/gts_INVXXXXXXXX.pdf
+python3 "agents/coo-01-invoice/parsers/parse_gts_pdf.py" path/to/gts_INVXXXXXXXX.pdf
 ```
 
 The script outputs a JSON array of line items to stdout. Capture it:
 
 ```bash
-python3 Skills/scripts/parse_gts_pdf.py gts_INV01085285.pdf > /tmp/gts_items.json
+python3 agents/coo-01-invoice/parsers/parse_gts_pdf.py gts_INV01085285.pdf > /tmp/gts_items.json
 ```
 
 ---

@@ -9,8 +9,19 @@ import { getOrders, pullProductCosts } from '../../shared/shopify.js';
 
 export { pullProductCosts };
 
-// Minimum acceptable gross margin — categories below this trigger alerts
+// Default minimum acceptable gross margin — categories below this trigger alerts
 export const MARGIN_THRESHOLD = 0.30;
+
+// Category-specific thresholds (override default for categories with known margin structures)
+// Gachapon: set COGS offsets shipping costs on Japanese shipments — lower margin is expected
+export const CATEGORY_THRESHOLDS = {
+  'Gachapon': 0.15,
+};
+
+/** Return the margin threshold for a given category (falls back to default) */
+export function getThreshold(category) {
+  return CATEGORY_THRESHOLDS[category] ?? MARGIN_THRESHOLD;
+}
 
 /**
  * Fetch orders for the trailing 7 days, group line items by product_type.
@@ -113,10 +124,11 @@ export function calculateMargins(salesByCategory, costsByVariant, productTypeMap
     const margin = revenue > 0 ? ((revenue - cogs) / revenue) * 100 : 0;
     const roundedMargin = Math.round(margin * 100) / 100;
 
+    const threshold = getThreshold(category);
     let status = 'healthy';
     if (roundedMargin < 0) {
       status = 'critical';
-    } else if (roundedMargin < MARGIN_THRESHOLD * 100) {
+    } else if (roundedMargin < threshold * 100) {
       status = 'warning';
     }
 

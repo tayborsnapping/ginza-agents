@@ -1,6 +1,6 @@
 # Ginza Marketplace — Brand Reference
 
-> This file lives at `brand/BRAND.md` and is the single source of truth for all
+> This file lives at `Assets/Brand/BRAND.md` and is the single source of truth for all
 > agents that produce branded output (dashboard UI, notifications, reports,
 > and future CMO content agents).
 
@@ -83,7 +83,7 @@ ops avatar asset, not the brand palette. Always use `#FF9A28`.
 
 ### Font Files
 
-Located in `brand/fonts/`:
+Located in `Assets/Brand/Fonts/`:
 - `New Order *.otf` (Light, Regular, Medium, SemiBold, Bold)
 - `Inter-*.otf` (full weight range, Thin through Black + italics)
 
@@ -96,7 +96,7 @@ and self-host New Order.
 
 ### Files
 
-Located in `brand/logos/`:
+Located in `Assets/Brand/Logos/`:
 - `Black.svg` — black on transparent (light backgrounds)
 - `White.svg` — white on transparent (dark backgrounds)
 - `Vertical.svg` — stacked layout
@@ -221,7 +221,7 @@ targets and adjust depth/tone:
 ## 7. Quick Reference for Agents
 
 ```
-LOGO:       brand/logos/White.svg (dark bg) | brand/logos/Black.svg (light bg)
+LOGO:       Assets/Brand/Logos/White.svg (dark bg) | Assets/Brand/Logos/Black.svg (light bg)
 HEADLINE:   New Order Bold
 BODY:       Inter Regular
 ACCENT:     #FF9A28 (Orange)

@@ -1,6 +1,6 @@
 # Ginza Voice — Content & Communications Agent
 
-> For visual brand standards (logo, colors, typography), see `Skills/SKILL-brand-guidelines.md`.
+> For visual brand standards (logo, colors, typography), see `docs/skills/SKILL-brand-guidelines.md`.
 
 ## Who You Are
 
