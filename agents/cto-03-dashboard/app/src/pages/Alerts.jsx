@@ -17,6 +17,8 @@ export default function Alerts() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [error, setError] = useState(null);
+  const [clearing, setClearing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -26,7 +28,21 @@ export default function Alerts() {
       .then(d => { if (mounted) { setAlerts(d.alerts); setLoading(false); } })
       .catch(e => { if (mounted) { setError(e.message); setLoading(false); } });
     return () => { mounted = false; };
-  }, [filter]);
+  }, [filter, refreshKey]);
+
+  function handleClear() {
+    const label = filter === 'all' ? 'all' : `all ${filter}`;
+    if (!confirm(`Delete ${label} alerts? This cannot be undone.`)) return;
+    setClearing(true);
+    const body = {};
+    if (filter !== 'all') body.priority = filter;
+    apiFetch('/api/alerts/clear', { method: 'POST', body })
+      .then(d => {
+        setClearing(false);
+        setRefreshKey(k => k + 1);
+      })
+      .catch(e => { setClearing(false); setError(e.message); });
+  }
 
   if (error) return <div className="error-msg">Error: {error}</div>;
 
@@ -44,6 +60,22 @@ export default function Alerts() {
             {p}
           </button>
         ))}
+        {alerts.length > 0 && (
+          <button
+            className="filter-btn"
+            style={{
+              marginLeft: 'auto',
+              background: 'var(--red, #ef4444)',
+              color: '#fff',
+              fontWeight: 600,
+              opacity: clearing ? 0.5 : 1,
+            }}
+            onClick={handleClear}
+            disabled={clearing}
+          >
+            {clearing ? 'Clearing...' : 'Clear Alerts'}
+          </button>
+        )}
       </div>
 
       <div className="card">

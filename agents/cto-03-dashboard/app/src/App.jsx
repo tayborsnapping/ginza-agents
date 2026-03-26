@@ -14,11 +14,16 @@ function getToken() {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, ''); // '/dashboard' or ''
 
-export function apiFetch(path) {
+export function apiFetch(path, options = {}) {
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = token ? `${BASE}${path}${sep}token=${token}` : `${BASE}${path}`;
-  return fetch(url).then(r => {
+  const fetchOpts = { ...options };
+  if (options.body && typeof options.body === 'object') {
+    fetchOpts.headers = { 'Content-Type': 'application/json', ...options.headers };
+    fetchOpts.body = JSON.stringify(options.body);
+  }
+  return fetch(url, fetchOpts).then(r => {
     if (!r.ok) throw new Error(`API ${r.status}: ${r.statusText}`);
     return r.json();
   });

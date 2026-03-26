@@ -259,6 +259,23 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
+// POST /api/alerts/clear — Delete alerts from the database
+app.post('/api/alerts/clear', express.json(), (req, res) => {
+  const db = getDb();
+  const { priority } = req.body || {};
+
+  let query = 'DELETE FROM alerts WHERE 1=1';
+  const params = [];
+
+  if (priority) {
+    query += ' AND priority = ?';
+    params.push(priority);
+  }
+
+  const result = db.prepare(query).run(...params);
+  res.json({ cleared: result.changes });
+});
+
 // --- Serve React SPA static files ---
 // Serve at both root (Nginx strips /dashboard/ prefix on VPS) and /dashboard/ (direct access)
 const distPath = join(__dirname, 'app', 'dist');

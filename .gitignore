@@ -19,8 +19,7 @@ logs/
 # PM2
 .pm2/
 
-# Dashboard app build + deps
-agents/cto-03-dashboard/app/dist/
+# Dashboard app deps
 agents/cto-03-dashboard/app/node_modules/
 
 # OS
