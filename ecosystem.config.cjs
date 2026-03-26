@@ -32,5 +32,14 @@ module.exports = {
       cron_restart: '0 8 * * *',      // Daily 8:00 AM ET
       autorestart: false,
     },
+    {
+      name: 'coo-02-shopify',
+      script: 'agents/coo-02-shopify-entry/index.js',
+      // Triggered by COO-01 completion (runner.triggerAgent), not cron
+      autorestart: false,
+      env: {
+        COO02_DRY_RUN: 'true',       // Default: dry-run mode ON
+      },
+    },
   ],
 };

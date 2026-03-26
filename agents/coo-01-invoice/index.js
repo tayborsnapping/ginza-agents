@@ -6,7 +6,7 @@
 
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { run } from '../../shared/runner.js';
+import { run, triggerAgent } from '../../shared/runner.js';
 import { parseJSON, stripCodeFences } from '../../shared/utils.js';
 import { checkGmail, downloadAttachment, detectSupplier, parseInvoice, markProcessed } from './tools.js';
 
@@ -177,6 +177,15 @@ await run({
         'Low Confidence Invoices',
         `${lowConfidence.length} invoices parsed with low confidence — manual review recommended`
       );
+    }
+
+    // Step 8: Trigger COO-02 (Shopify Product Entry) to process the parsed data
+    try {
+      triggerAgent('coo-02-shopify-entry');
+      ctx.log('Triggered COO-02 (Shopify Product Entry)');
+    } catch (triggerErr) {
+      ctx.log(`Warning: failed to trigger COO-02: ${triggerErr.message}`);
+      ctx.alert('warning', 'COO-02 Trigger Failed', `Could not auto-trigger COO-02: ${triggerErr.message}. Run manually.`);
     }
 
     // Return summary

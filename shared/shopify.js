@@ -123,3 +123,36 @@ export async function getInventoryLevels({ inventoryItemIds }) {
     inventory_item_ids: inventoryItemIds.join(','),
   });
 }
+
+/**
+ * Set inventory level for a specific inventory item at a location.
+ * @param {{ inventoryItemId: number|string, locationId: number|string, available: number }} params
+ * @returns {object} Updated inventory level
+ */
+export async function setInventoryLevel({ inventoryItemId, locationId, available }) {
+  const shopify = getClient();
+  return shopify.inventoryLevel.set({
+    inventory_item_id: inventoryItemId,
+    location_id: locationId,
+    available,
+  });
+}
+
+/**
+ * Search products by title (exact match via Shopify REST API).
+ * @param {string} title
+ * @returns {Array} Matching products
+ */
+export async function searchProductsByTitle(title) {
+  const shopify = getClient();
+  return shopify.product.list({ title, limit: 10 });
+}
+
+/**
+ * Get Shopify shop locations.
+ * @returns {Array} Location objects
+ */
+export async function getLocations() {
+  const shopify = getClient();
+  return shopify.location.list();
+}
