@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "CTO-03 Dashboard (Express API)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["agents/cto-03-dashboard/index.js"],
+      "port": 3737
+    },
+    {
+      "name": "CTO-03 Dashboard (Vite Dev)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    }
+  ]
+}

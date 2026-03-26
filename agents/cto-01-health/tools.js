@@ -5,12 +5,14 @@ import { getDetroitTime } from '../../shared/utils.js';
 
 // Known agent registry with expected schedules
 const AGENT_REGISTRY = [
-  { id: 'cto-04-alerts',  schedule: 'always-on',   intervalMs: null },
-  { id: 'cto-01-health',  schedule: 'every-30-min', intervalMs: 30 * 60_000 },
-  { id: 'cfo-03-margin',  schedule: 'daily-6am',    intervalMs: 24 * 60 * 60_000 },
-  { id: 'cfo-01-weekly',  schedule: 'monday-7am',   intervalMs: 7 * 24 * 60 * 60_000 },
-  { id: 'coo-01-invoice', schedule: 'daily-8am',    intervalMs: 24 * 60 * 60_000 },
-  { id: 'test-agent',     schedule: 'on-demand',    intervalMs: null },
+  { id: 'cto-01-health',       schedule: 'every-30-min', intervalMs: 30 * 60_000 },
+  { id: 'cto-03-dashboard',    schedule: 'always-on',    intervalMs: null },
+  { id: 'cto-04-alerts',       schedule: 'always-on',    intervalMs: null },
+  { id: 'coo-01-invoice',      schedule: 'daily-8am',    intervalMs: 24 * 60 * 60_000 },
+  { id: 'coo-02-shopify',      schedule: 'on-demand',    intervalMs: null },
+  { id: 'coo-03-descriptions', schedule: 'on-demand',    intervalMs: null },
+  { id: 'cfo-01-weekly',       schedule: 'monday-7am',   intervalMs: 7 * 24 * 60 * 60_000 },
+  { id: 'cfo-03-margin',       schedule: 'daily-6am',    intervalMs: 24 * 60 * 60_000 },
 ];
 
 /**

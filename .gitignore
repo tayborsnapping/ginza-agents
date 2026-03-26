@@ -19,8 +19,9 @@ logs/
 # PM2
 .pm2/
 
-# Build output
+# Dashboard app build + deps
 agents/cto-03-dashboard/app/dist/
+agents/cto-03-dashboard/app/node_modules/
 
 # OS
 .DS_Store

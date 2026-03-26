@@ -146,6 +146,7 @@ This decouples agents completely. Any agent can be rebuilt without affecting oth
 | COO-02 | shopify_entries      | { created[], updated[], skipped[], errors[] }       |
 | COO-03 | product_descriptions | { described[], skipped[], errors[], dryRun }         |
 | CTO-01 | health_status        | { agents[{ id, lastRun, status, duration }] }       |
+| CTO-03 | —                    | Dashboard server (reads all outputs, writes none)    |
 
 ---
 

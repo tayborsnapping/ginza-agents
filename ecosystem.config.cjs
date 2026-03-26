@@ -6,6 +6,14 @@ module.exports = {
       script: 'agents/cto-04-alerts/index.js',
       // Discord bot — runs continuously, PM2 keeps alive
     },
+    {
+      name: 'cto-03-dashboard',
+      script: 'agents/cto-03-dashboard/index.js',
+      // Mission Control dashboard — Express server, always-on
+      env: {
+        DASHBOARD_PORT: '3737',
+      },
+    },
 
     // === SCHEDULED AGENTS ===
     {
