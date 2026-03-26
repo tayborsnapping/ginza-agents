@@ -26,5 +26,11 @@ export default {
       cron_restart: '0 6 * * *',      // Daily 6:00 AM ET
       autorestart: false,
     },
+    {
+      name: 'coo-01-invoice',
+      script: 'agents/coo-01-invoice/index.js',
+      cron_restart: '0 8 * * *',      // Daily 8:00 AM ET
+      autorestart: false,
+    },
   ],
 };
