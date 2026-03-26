@@ -41,5 +41,14 @@ module.exports = {
         COO02_DRY_RUN: 'true',       // Default: dry-run mode ON
       },
     },
+    {
+      name: 'coo-03-descriptions',
+      script: 'agents/coo-03-descriptions/index.js',
+      // Triggered by COO-02 completion (runner.triggerAgent), not cron
+      autorestart: false,
+      env: {
+        COO03_DRY_RUN: 'true',       // Default: dry-run mode ON
+      },
+    },
   ],
 };

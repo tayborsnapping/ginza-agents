@@ -5,7 +5,7 @@
 
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { run } from '../../shared/runner.js';
+import { run, triggerAgent } from '../../shared/runner.js';
 import {
   readParsedInvoices,
   extractApprovedProducts,
@@ -194,6 +194,17 @@ await run({
     const analysis = await ctx.anthropic(
       `Analyze these Shopify product entry results and provide a concise summary:\n\n${analysisPayload}`
     );
+
+    // Step 9: Trigger COO-03 (Product Descriptions) if we created products
+    if (created.length > 0) {
+      try {
+        triggerAgent('coo-03-descriptions');
+        ctx.log('Triggered COO-03 (Product Descriptions)');
+      } catch (triggerErr) {
+        ctx.log(`Warning: failed to trigger COO-03: ${triggerErr.message}`);
+        ctx.alert('warning', 'COO-03 Trigger Failed', `Could not auto-trigger COO-03: ${triggerErr.message}. Run manually.`);
+      }
+    }
 
     return analysis.content || output.summary;
   },

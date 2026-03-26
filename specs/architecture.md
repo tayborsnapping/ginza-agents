@@ -144,6 +144,7 @@ This decouples agents completely. Any agent can be rebuilt without affecting oth
 | CFO-03 | margin_alerts        | { alerts[], categoryMargins[], timestamp }          |
 | COO-01 | parsed_invoices      | { invoices[{ supplier, products[], totalCost }] }   |
 | COO-02 | shopify_entries      | { created[], updated[], skipped[], errors[] }       |
+| COO-03 | product_descriptions | { described[], skipped[], errors[], dryRun }         |
 | CTO-01 | health_status        | { agents[{ id, lastRun, status, duration }] }       |
 
 ---
@@ -223,7 +224,7 @@ Max tokens: 4096 default, configurable per agent.
 //   GET /orders.json — CFO-01, CFO-03
 //   GET /products.json — CFO-03, COO-02, COO-03
 //   POST /products.json — COO-02
-//   PUT /products/{id}.json — COO-02
+//   PUT /products/{id}.json — COO-02, COO-03
 //   GET /inventory_levels.json — COO-03
 // Rate limiting: 2 calls/second with automatic queue
 // Pagination: auto-follows Link headers for full dataset retrieval
