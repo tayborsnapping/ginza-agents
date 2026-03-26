@@ -31,7 +31,7 @@ module.exports = {
     {
       name: 'cfo-03-margin',
       script: 'agents/cfo-03-margin-watch/index.js',
-      cron_restart: '0 6 * * *',      // Daily 6:00 AM ET
+      cron_restart: '15 6 * * *',     // Daily 6:15 AM ET (offset from CFO-01 to avoid Shopify rate limits)
       autorestart: false,
     },
     {

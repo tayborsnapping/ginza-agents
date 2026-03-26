@@ -4,17 +4,7 @@
 // computes top sellers and week-over-week changes.
 // Reuses the variant-level cost lookup pattern from CFO-03 for margin data.
 
-import { getOrders, getProducts } from '../../shared/shopify.js';
-import ShopifyApi from 'shopify-api-node';
-
-/** Get the shared Shopify client (same credentials as shared/shopify.js) */
-function getShopifyClient() {
-  return new ShopifyApi({
-    shopName: process.env.SHOPIFY_STORE,
-    accessToken: process.env.SHOPIFY_ACCESS_TOKEN,
-    autoLimit: { calls: 2, interval: 1000 },
-  });
-}
+import { getOrders, getProducts, getInventoryCosts } from '../../shared/shopify.js';
 
 /**
  * Fetch all products and build lookup maps (same pattern as CFO-03):
@@ -44,31 +34,17 @@ export async function pullProductCosts(ctx) {
     }
   }
 
-  // Batch-fetch inventory items in chunks of 100 (Shopify API limit)
-  const shopify = getShopifyClient();
-  const costsByVariant = {};        // variant_id → cost
-  const CHUNK_SIZE = 100;
-
+  // Batch-fetch inventory items with retry/backoff (shared utility)
   ctx.log(`Fetching cost data for ${allInvItemIds.length} inventory items`);
 
-  for (let i = 0; i < allInvItemIds.length; i += CHUNK_SIZE) {
-    const chunk = allInvItemIds.slice(i, i + CHUNK_SIZE);
-    try {
-      const items = await shopify.inventoryItem.list({
-        ids: chunk.join(','),
-        limit: CHUNK_SIZE,
-      });
+  const costsById = await getInventoryCosts(allInvItemIds, { log: ctx.log.bind(ctx) });
 
-      for (const item of items) {
-        const variantId = invItemToVariant[item.id];
-        const cost = item.cost ? parseFloat(item.cost) : null;
-
-        if (variantId && cost && cost > 0) {
-          costsByVariant[variantId] = cost;
-        }
-      }
-    } catch (err) {
-      ctx.log(`Warning: failed to fetch inventory items batch ${i}-${i + CHUNK_SIZE}: ${err.message}`);
+  // Map inventoryItemId → variantId costs
+  const costsByVariant = {};
+  for (const [invItemId, cost] of Object.entries(costsById)) {
+    const variantId = invItemToVariant[invItemId];
+    if (variantId) {
+      costsByVariant[variantId] = cost;
     }
   }
 

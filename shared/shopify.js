@@ -156,3 +156,74 @@ export async function getLocations() {
   const shopify = getClient();
   return shopify.location.list();
 }
+
+/**
+ * Sleep for a given number of milliseconds.
+ * @param {number} ms
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetch inventory item costs for a list of inventory item IDs with retry + exponential backoff.
+ * Handles Shopify 429 rate limits by waiting and retrying (up to 3 attempts per batch).
+ * Returns a map of inventoryItemId → cost.
+ *
+ * @param {Array<number|string>} inventoryItemIds
+ * @param {{ log?: Function }} [opts] - Optional logger (e.g. ctx.log)
+ * @returns {Object<string, number>} Map of inventoryItemId → cost
+ */
+export async function getInventoryCosts(inventoryItemIds, opts = {}) {
+  const log = opts.log || (() => {});
+  if (!inventoryItemIds?.length) return {};
+
+  const shopify = getClient();
+  const costsById = {};
+  const CHUNK_SIZE = 100;
+  const MAX_RETRIES = 3;
+  const BASE_DELAY_MS = 2000;
+
+  for (let i = 0; i < inventoryItemIds.length; i += CHUNK_SIZE) {
+    const chunk = inventoryItemIds.slice(i, i + CHUNK_SIZE);
+    let success = false;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const items = await shopify.inventoryItem.list({
+          ids: chunk.join(','),
+          limit: CHUNK_SIZE,
+        });
+
+        for (const item of items) {
+          const cost = item.cost ? parseFloat(item.cost) : null;
+          if (cost && cost > 0) {
+            costsById[item.id] = cost;
+          }
+        }
+        success = true;
+        break;
+      } catch (err) {
+        if (err.statusCode === 429 || err.message?.includes('429')) {
+          const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+          log(`Rate limited on batch ${i}-${i + CHUNK_SIZE}, retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`);
+          await sleep(delay);
+        } else {
+          log(`Warning: failed to fetch inventory items batch ${i}-${i + CHUNK_SIZE}: ${err.message}`);
+          break; // Non-retryable error
+        }
+      }
+    }
+
+    if (!success) {
+      log(`Warning: gave up on batch ${i}-${i + CHUNK_SIZE} after ${MAX_RETRIES} retries`);
+    }
+
+    // Small delay between batches to stay under rate limits
+    if (i + CHUNK_SIZE < inventoryItemIds.length) {
+      await sleep(500);
+    }
+  }
+
+  return costsById;
+}
