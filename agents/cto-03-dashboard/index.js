@@ -260,7 +260,9 @@ app.get('/api/stats', (req, res) => {
 });
 
 // --- Serve React SPA static files ---
+// Serve at both root (Nginx strips /dashboard/ prefix on VPS) and /dashboard/ (direct access)
 const distPath = join(__dirname, 'app', 'dist');
+app.use('/dashboard', express.static(distPath));
 app.use(express.static(distPath));
 
 // SPA fallback — serve index.html for all non-API routes
