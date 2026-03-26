@@ -4,7 +4,7 @@
 
 import { createRequire } from 'module';
 import { listMessages, getMessage, getAttachment, addLabel } from '../../shared/gmail.js';
-import { parseJSON } from '../../shared/utils.js';
+import { parseJSON, stripCodeFences } from '../../shared/utils.js';
 import Papa from 'papaparse';
 
 const require = createRequire(import.meta.url);
@@ -247,11 +247,7 @@ ${extractedContent}`;
   const result = await ctx.anthropic(prompt, { maxTokens: 4096 });
 
   // Step 4: Parse the JSON response (strip markdown fences if present)
-  let jsonStr = result.content.trim();
-  const fenceMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-  if (fenceMatch) jsonStr = fenceMatch[1].trim();
-
-  const parsed = parseJSON(jsonStr);
+  const parsed = parseJSON(stripCodeFences(result.content));
   if (!parsed) {
     throw new Error(`Failed to parse Anthropic invoice response as JSON: ${result.content.substring(0, 200)}`);
   }

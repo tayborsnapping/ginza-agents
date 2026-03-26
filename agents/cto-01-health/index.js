@@ -6,7 +6,7 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { run } from '../../shared/runner.js';
-import { parseJSON } from '../../shared/utils.js';
+import { parseJSON, stripCodeFences } from '../../shared/utils.js';
 import { getHealthData } from './tools.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -31,11 +31,7 @@ await run({
     ctx.log(`Anthropic response received (${result.tokensIn} in, ${result.tokensOut} out)`);
 
     // Step 3: Parse the structured response (strip markdown fences if present)
-    let jsonStr = result.content.trim();
-    const fenceMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-    if (fenceMatch) jsonStr = fenceMatch[1].trim();
-
-    const analysis = parseJSON(jsonStr);
+    const analysis = parseJSON(stripCodeFences(result.content));
     if (!analysis || !analysis.agents) {
       throw new Error(`Invalid health analysis response: ${result.content.substring(0, 200)}`);
     }

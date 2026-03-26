@@ -7,7 +7,7 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { run } from '../../shared/runner.js';
-import { parseJSON } from '../../shared/utils.js';
+import { parseJSON, stripCodeFences } from '../../shared/utils.js';
 import { pullProductCosts, pullWeeklyOrders, pullTopSellers, calculateWoW } from './tools.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -53,11 +53,7 @@ await run({
     ctx.log(`Anthropic response received (${result.tokensIn} in, ${result.tokensOut} out)`);
 
     // Step 6: Parse response (strip markdown fences if present)
-    let jsonStr = result.content.trim();
-    const fenceMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-    if (fenceMatch) jsonStr = fenceMatch[1].trim();
-
-    const analysis = parseJSON(jsonStr);
+    const analysis = parseJSON(stripCodeFences(result.content));
     if (!analysis) {
       throw new Error(`Invalid weekly report response: ${result.content.substring(0, 200)}`);
     }
@@ -88,6 +84,16 @@ await run({
         `Revenue dropped ${Math.abs(wow.totals.revenue)}% week-over-week ($${previousWeek.totalRevenue} → $${currentWeek.totalRevenue}). Review the weekly report for details.`
       );
       ctx.log(`Warning alert queued: revenue dropped ${wow.totals.revenue}%`);
+    }
+
+    // Step 10: Warn if >20% of line items have no cost data
+    if (currentWeek.missingCostPct > 20) {
+      ctx.alert(
+        'warning',
+        `Missing Cost Data — ${weekLabel}`,
+        `${currentWeek.missingCostPct}% of line items (${currentWeek.missingCostLineItems}/${currentWeek.totalLineItems}) have no cost data — margin calculations may be unreliable.`
+      );
+      ctx.log(`Warning: ${currentWeek.missingCostPct}% of line items missing cost data`);
     }
 
     // Return summary for agent_runs

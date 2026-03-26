@@ -167,6 +167,8 @@ export function calculateMargins(salesByCategory, costsByVariant, productTypeMap
 
   // Build COGS by category from order line items, using variant_id for cost lookup
   const cogsByCategory = {};
+  let totalLineItems = 0;
+  let missingCostLineItems = 0;
 
   for (const order of orders) {
     if (order.cancelled_at) continue;
@@ -175,6 +177,9 @@ export function calculateMargins(salesByCategory, costsByVariant, productTypeMap
       const category = productTypeMap[item.product_id] || 'Uncategorized';
       const unitCost = costsByVariant[item.variant_id] || 0;
       const lineCOGS = unitCost * item.quantity;
+
+      totalLineItems++;
+      if (unitCost === 0) missingCostLineItems++;
 
       if (!cogsByCategory[category]) {
         cogsByCategory[category] = 0;
@@ -217,11 +222,18 @@ export function calculateMargins(salesByCategory, costsByVariant, productTypeMap
     ? Math.round(((totalRevenue - totalCOGS) / totalRevenue) * 10000) / 100
     : 0;
 
+  const missingCostPct = totalLineItems > 0
+    ? Math.round((missingCostLineItems / totalLineItems) * 1000) / 10
+    : 0;
+
   return {
     categoryMargins,
     totalRevenue: Math.round(totalRevenue * 100) / 100,
     totalCOGS: Math.round(totalCOGS * 100) / 100,
     overallMargin,
     missingCostCount,
+    totalLineItems,
+    missingCostLineItems,
+    missingCostPct,
   };
 }

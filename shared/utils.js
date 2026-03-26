@@ -62,6 +62,18 @@ export function formatCurrency(cents) {
 }
 
 /**
+ * Strip markdown code fences from a string (e.g. ```json ... ```).
+ * LLMs often wrap JSON responses in fences even when told not to.
+ * @param {string} str
+ * @returns {string}
+ */
+export function stripCodeFences(str) {
+  const s = str.trim();
+  const fenceMatch = s.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  return fenceMatch ? fenceMatch[1].trim() : s;
+}
+
+/**
  * Safe JSON parse — returns null instead of throwing on malformed input.
  * @param {string} str
  * @returns {any|null}

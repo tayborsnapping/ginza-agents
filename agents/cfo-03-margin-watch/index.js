@@ -6,7 +6,7 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { run } from '../../shared/runner.js';
-import { parseJSON } from '../../shared/utils.js';
+import { parseJSON, stripCodeFences } from '../../shared/utils.js';
 import { pullCategorySales, pullProductCosts, calculateMargins, MARGIN_THRESHOLD } from './tools.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -43,11 +43,7 @@ await run({
     ctx.log(`Anthropic response received (${result.tokensIn} in, ${result.tokensOut} out)`);
 
     // Step 5: Parse response (strip markdown fences if present)
-    let jsonStr = result.content.trim();
-    const fenceMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-    if (fenceMatch) jsonStr = fenceMatch[1].trim();
-
-    const analysis = parseJSON(jsonStr);
+    const analysis = parseJSON(stripCodeFences(result.content));
     if (!analysis) {
       throw new Error(`Invalid margin analysis response: ${result.content.substring(0, 200)}`);
     }
@@ -87,6 +83,16 @@ await run({
 
     if (criticalCategories.length === 0 && warningCategories.length === 0) {
       ctx.log('All categories above margin threshold — no alerts needed');
+    }
+
+    // Step 7b: Warn if >20% of line items have no cost data
+    if (marginData.missingCostPct > 20) {
+      ctx.alert(
+        'warning',
+        'Missing Cost Data',
+        `${marginData.missingCostPct}% of line items (${marginData.missingCostLineItems}/${marginData.totalLineItems}) have no cost data — margin calculations may be unreliable.`
+      );
+      ctx.log(`Warning: ${marginData.missingCostPct}% of line items missing cost data`);
     }
 
     // Return summary for agent_runs

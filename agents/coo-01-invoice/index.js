@@ -7,7 +7,7 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { run } from '../../shared/runner.js';
-import { parseJSON } from '../../shared/utils.js';
+import { parseJSON, stripCodeFences } from '../../shared/utils.js';
 import { checkGmail, downloadAttachment, detectSupplier, parseInvoice, markProcessed } from './tools.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -27,12 +27,34 @@ await run({
       return 'No new invoices';
     }
 
-    ctx.log(`Processing ${emails.length} invoice emails`);
+    // Step 1b: Deduplicate — skip emails already parsed in a previous run
+    const previousOutput = ctx.readOutput('parsed_invoices');
+    const processedMessageIds = new Set();
+    if (previousOutput?.rawInvoices) {
+      for (const inv of previousOutput.rawInvoices) {
+        if (inv.emailMessageId) processedMessageIds.add(inv.emailMessageId);
+      }
+    }
+
+    const newEmails = emails.filter(e => {
+      if (processedMessageIds.has(e.messageId)) {
+        ctx.log(`Skipping already-parsed email: "${e.subject}" (messageId=${e.messageId})`);
+        return false;
+      }
+      return true;
+    });
+
+    if (newEmails.length === 0) {
+      ctx.log(`All ${emails.length} emails already parsed in previous run`);
+      return `No new invoices (${emails.length} already processed)`;
+    }
+
+    ctx.log(`Processing ${newEmails.length} invoice emails (${emails.length - newEmails.length} skipped as duplicates)`);
     const parsedInvoices = [];
     const errors = [];
 
     // Step 2: Process each invoice email
-    for (const email of emails) {
+    for (const email of newEmails) {
       ctx.log(`Processing: "${email.subject}" from ${email.sender}`);
 
       try {
@@ -71,8 +93,12 @@ await run({
           );
         }
 
-        // Step 2e: Mark email as processed
-        await markProcessed(ctx, email.messageId);
+        // Step 2e: Mark email as processed (best-effort — don't lose parsed data if labeling fails)
+        try {
+          await markProcessed(ctx, email.messageId);
+        } catch (labelErr) {
+          ctx.log(`Warning: failed to label email "${email.subject}" as processed: ${labelErr.message}`);
+        }
 
         parsedInvoices.push({
           ...result,
@@ -111,11 +137,7 @@ await run({
     ctx.log(`Validation response received (${result.tokensIn} in, ${result.tokensOut} out)`);
 
     // Step 4: Parse validation response
-    let jsonStr = result.content.trim();
-    const fenceMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-    if (fenceMatch) jsonStr = fenceMatch[1].trim();
-
-    const validation = parseJSON(jsonStr);
+    const validation = parseJSON(stripCodeFences(result.content));
     if (!validation) {
       throw new Error(`Invalid validation response: ${result.content.substring(0, 200)}`);
     }

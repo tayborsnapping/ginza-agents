@@ -177,6 +177,8 @@ function buildWeekData(orders, productTypeMap, costsByVariant) {
   let totalRevenue = 0;
   let totalUnits = 0;
   let totalCOGS = 0;
+  let totalLineItems = 0;
+  let missingCostLineItems = 0;
 
   for (const order of orders) {
     for (const item of order.line_items || []) {
@@ -184,6 +186,9 @@ function buildWeekData(orders, productTypeMap, costsByVariant) {
       const lineRevenue = parseFloat(item.price) * item.quantity;
       const unitCost = costsByVariant[item.variant_id] || 0;
       const lineCOGS = unitCost * item.quantity;
+
+      totalLineItems++;
+      if (unitCost === 0) missingCostLineItems++;
 
       if (!categories[category]) {
         categories[category] = { revenue: 0, units: 0, cogs: 0 };
@@ -219,6 +224,10 @@ function buildWeekData(orders, productTypeMap, costsByVariant) {
     }))
     .sort((a, b) => b.revenue - a.revenue);
 
+  const missingCostPct = totalLineItems > 0
+    ? Math.round((missingCostLineItems / totalLineItems) * 1000) / 10
+    : 0;
+
   return {
     categories: categoryList,
     totalRevenue,
@@ -226,6 +235,9 @@ function buildWeekData(orders, productTypeMap, costsByVariant) {
     totalOrders: orders.length,
     totalCOGS,
     overallMargin,
+    totalLineItems,
+    missingCostLineItems,
+    missingCostPct,
   };
 }
 

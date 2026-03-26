@@ -18,6 +18,7 @@ import { getDetroitTime } from '../../shared/utils.js';
 const POLL_INTERVAL_MS = 30_000;           // Check for new alerts every 30s
 const BATCH_INTERVAL_MS = 30 * 60_000;     // Flush info digest every 30 min
 const DEDUP_WINDOW_MS = 5 * 60_000;        // Ignore duplicate alerts within 5 min
+const STALE_ALERT_MS = 24 * 60 * 60_000;  // Don't retry alerts older than 24 hours
 
 // --- State ---
 const infoBatch = [];                       // Queued info alerts waiting for digest
@@ -76,23 +77,35 @@ async function processAlerts() {
   log(`Processing ${pending.length} pending alert(s)`);
 
   for (const alert of pending) {
-    // Always mark as sent in DB (even if deduped) to prevent re-processing
-    markAlertSent(alert.id);
+    // Skip stale alerts (older than 24 hours) — mark sent to clear the queue
+    const alertAge = Date.now() - new Date(alert.created_at).getTime();
+    if (alertAge > STALE_ALERT_MS) {
+      markAlertSent(alert.id);
+      log(`Stale (${Math.round(alertAge / 3600000)}h old), skipping: [${alert.source_agent}] ${alert.title}`);
+      continue;
+    }
 
     if (isDuplicate(alert)) {
+      markAlertSent(alert.id);
       log(`Deduped: [${alert.source_agent}] ${alert.title}`);
       continue;
     }
 
     if (alert.priority === 'info') {
-      // Batch info alerts for digest
+      // Batch info alerts for digest — mark sent now (digest delivery is best-effort)
+      markAlertSent(alert.id);
       infoBatch.push(alert);
       log(`Batched info: [${alert.source_agent}] ${alert.title}`);
     } else {
-      // Send warning/critical immediately
-      const formatted = formatAlert(alert);
-      await sendAlert(formatted);
-      log(`Sent ${alert.priority}: [${alert.source_agent}] ${alert.title}`);
+      // Send warning/critical immediately — only mark sent on success
+      try {
+        const formatted = formatAlert(alert);
+        await sendAlert(formatted);
+        markAlertSent(alert.id);
+        log(`Sent ${alert.priority}: [${alert.source_agent}] ${alert.title}`);
+      } catch (err) {
+        log(`Delivery failed for [${alert.source_agent}] ${alert.title}: ${err.message} — will retry next cycle`);
+      }
     }
   }
 }
