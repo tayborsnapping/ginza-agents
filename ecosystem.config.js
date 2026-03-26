@@ -14,5 +14,11 @@ export default {
       cron_restart: '5,35 * * * *',   // Every 30 min (offset from agent schedules)
       autorestart: false,
     },
+    {
+      name: 'cfo-03-margin',
+      script: 'agents/cfo-03-margin-watch/index.js',
+      cron_restart: '0 6 * * *',      // Daily 6:00 AM ET
+      autorestart: false,
+    },
   ],
 };
