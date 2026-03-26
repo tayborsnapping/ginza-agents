@@ -50,12 +50,13 @@ Respond with ONLY valid JSON (no markdown, no explanation). Use this structure:
 ```
 
 # Rules
-- Any single failure → status "warning" for that agent
+- failureStreak >= 1 (agent is actively failing) → status "warning"
 - Missed schedule (overdue by 2x interval) → status "warning"
-- 3 or more consecutive failures → status "critical" for that agent
+- failureStreak >= 3 (3+ consecutive failures) → status "critical"
+- If the most recent run is "success" and failureStreak is 0, the agent is "healthy" — do NOT warn about old failures in history
 - If ANY agent is critical → overallStatus is "critical"
 - If ANY agent is warning (none critical) → overallStatus is "degraded"
 - If all agents healthy → overallStatus is "healthy"
 - Agents with schedule "on-demand" or "always-on" skip missed-schedule checks
-- Include an alert entry for every warning or critical agent
+- Only include alert entries for agents with active problems (warning or critical status)
 - Keep the summary under 200 characters
