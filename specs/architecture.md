@@ -248,7 +248,7 @@ Max tokens: 4096 default, configurable per agent.
 
 ## PM2 Configuration
 
-File: `ecosystem.config.js`
+File: `ecosystem.config.cjs`
 
 ```javascript
 export default {
@@ -281,7 +281,7 @@ export default {
     {
       name: 'cfo-03-margin',
       script: 'agents/cfo-03-margin-watch/index.js',
-      cron_restart: '0 6 * * *',       // Daily 6:00 AM ET
+      cron_restart: '15 6 * * *',      // Daily 6:15 AM ET (offset from CFO-01)
       autorestart: false,
     },
     {

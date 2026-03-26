@@ -3,7 +3,7 @@
 // for product context, and updates Shopify listings with generated descriptions.
 
 import {
-  getProducts,
+  getProduct,
   updateProduct as shopifyUpdateProduct,
 } from '../../shared/shopify.js';
 
@@ -43,18 +43,7 @@ export function readShopifyEntries(ctx) {
  */
 export async function getProductDetails(ctx, shopifyId) {
   try {
-    // getProducts with specific IDs — Shopify REST API supports ids filter
-    const products = await getProducts({ limit: 1 });
-    // Actually, shopify-api-node has a .get() method. Let's use a targeted approach.
-    // We'll search by ID via the products list with ids param.
-    const { default: ShopifyApi } = await import('shopify-api-node');
-    const shopify = new ShopifyApi({
-      shopName: process.env.SHOPIFY_STORE,
-      accessToken: process.env.SHOPIFY_ACCESS_TOKEN,
-      autoLimit: { calls: 2, interval: 1000 },
-    });
-    const product = await shopify.product.get(shopifyId);
-    return product;
+    return await getProduct(shopifyId);
   } catch (err) {
     ctx.log(`Failed to fetch product ${shopifyId}: ${err.message}`);
     return null;

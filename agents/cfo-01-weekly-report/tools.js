@@ -2,56 +2,10 @@
 // Ginza is open Wed-Sun, so "weekly" means the Wed-Sun business week.
 // Fetches current + previous business week orders, builds category breakdowns,
 // computes top sellers and week-over-week changes.
-// Reuses the variant-level cost lookup pattern from CFO-03 for margin data.
 
-import { getOrders, getProducts, getInventoryCosts } from '../../shared/shopify.js';
+import { getOrders, pullProductCosts } from '../../shared/shopify.js';
 
-/**
- * Fetch all products and build lookup maps (same pattern as CFO-03):
- *   - productTypeMap: product_id → product_type
- *   - costsByVariant: variant_id → cost (via InventoryItem API)
- *
- * @param {object} ctx - Runner context
- */
-export async function pullProductCosts(ctx) {
-  ctx.log('Fetching all products for type and cost data');
-
-  const products = await getProducts();
-  ctx.log(`Fetched ${products.length} products`);
-
-  const productTypeMap = {};        // product_id → product_type
-  const invItemToVariant = {};      // inventory_item_id → variant_id
-  const allInvItemIds = [];
-
-  for (const product of products) {
-    productTypeMap[product.id] = product.product_type || 'Uncategorized';
-
-    for (const variant of product.variants || []) {
-      if (variant.inventory_item_id) {
-        invItemToVariant[variant.inventory_item_id] = variant.id;
-        allInvItemIds.push(variant.inventory_item_id);
-      }
-    }
-  }
-
-  // Batch-fetch inventory items with retry/backoff (shared utility)
-  ctx.log(`Fetching cost data for ${allInvItemIds.length} inventory items`);
-
-  const costsById = await getInventoryCosts(allInvItemIds, { log: ctx.log.bind(ctx) });
-
-  // Map inventoryItemId → variantId costs
-  const costsByVariant = {};
-  for (const [invItemId, cost] of Object.entries(costsById)) {
-    const variantId = invItemToVariant[invItemId];
-    if (variantId) {
-      costsByVariant[variantId] = cost;
-    }
-  }
-
-  ctx.log(`Cost data: ${Object.keys(costsByVariant).length} variants with cost`);
-
-  return { costsByVariant, productTypeMap };
-}
+export { pullProductCosts };
 
 /**
  * Get the Wed-Sun business week boundaries.

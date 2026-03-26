@@ -101,6 +101,16 @@ export async function createProduct(productData) {
 }
 
 /**
+ * Fetch a single product by ID.
+ * @param {number|string} productId
+ * @returns {object} Product object
+ */
+export async function getProduct(productId) {
+  const shopify = getClient();
+  return shopify.product.get(productId);
+}
+
+/**
  * Update an existing Shopify product.
  * @param {number|string} productId
  * @param {object} productData - Fields to update
@@ -226,4 +236,58 @@ export async function getInventoryCosts(inventoryItemIds, opts = {}) {
   }
 
   return costsById;
+}
+
+/**
+ * Fetch all products and build cost/type lookup maps.
+ * Returns productTypeMap (product_id → product_type) and costsByVariant (variant_id → cost).
+ * Used by CFO-01 and CFO-03 for margin calculations.
+ *
+ * @param {{ log?: Function }} [opts] - Optional logger (e.g. ctx.log)
+ * @returns {{ costsByVariant: Object, productTypeMap: Object, totalProducts: number, missingCostCount: number }}
+ */
+export async function pullProductCosts(opts = {}) {
+  const log = opts.log || (() => {});
+
+  log('Fetching all products for type and cost data');
+  const products = await getProducts();
+  log(`Fetched ${products.length} products`);
+
+  const productTypeMap = {};        // product_id → product_type
+  const invItemToVariant = {};      // inventory_item_id → variant_id
+  const allInvItemIds = [];
+
+  for (const product of products) {
+    productTypeMap[product.id] = product.product_type || 'Uncategorized';
+
+    for (const variant of product.variants || []) {
+      if (variant.inventory_item_id) {
+        invItemToVariant[variant.inventory_item_id] = variant.id;
+        allInvItemIds.push(variant.inventory_item_id);
+      }
+    }
+  }
+
+  log(`Fetching cost data for ${allInvItemIds.length} inventory items`);
+  const costsById = await getInventoryCosts(allInvItemIds, { log });
+
+  // Map inventoryItemId → variantId costs
+  const costsByVariant = {};
+  for (const [invItemId, cost] of Object.entries(costsById)) {
+    const variantId = invItemToVariant[invItemId];
+    if (variantId) {
+      costsByVariant[variantId] = cost;
+    }
+  }
+
+  // Count products where no variant has cost data
+  let missingCostCount = 0;
+  for (const product of products) {
+    const hasCost = (product.variants || []).some(v => costsByVariant[v.id]);
+    if (!hasCost) missingCostCount++;
+  }
+
+  log(`Cost data: ${Object.keys(costsByVariant).length} variants with cost, ${missingCostCount} products fully missing cost`);
+
+  return { costsByVariant, productTypeMap, totalProducts: products.length, missingCostCount };
 }
