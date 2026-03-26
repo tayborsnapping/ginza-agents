@@ -7,12 +7,12 @@ export default {
       // Discord bot — runs continuously, PM2 keeps alive
     },
 
-    // === SCHEDULED AGENTS (added in later sessions) ===
-    // {
-    //   name: 'cto-01-health',
-    //   script: 'agents/cto-01-health/index.js',
-    //   cron_restart: '5,35 * * * *',
-    //   autorestart: false,
-    // },
+    // === SCHEDULED AGENTS ===
+    {
+      name: 'cto-01-health',
+      script: 'agents/cto-01-health/index.js',
+      cron_restart: '5,35 * * * *',   // Every 30 min (offset from agent schedules)
+      autorestart: false,
+    },
   ],
 };

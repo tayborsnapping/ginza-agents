@@ -7,15 +7,17 @@ import { google } from 'googleapis';
 const TARGET_EMAIL = process.env.GMAIL_TARGET_EMAIL || 'info@ginzatcg.com';
 
 function getAuth() {
-  const { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN } = process.env;
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
 
-  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
+  if (!clientId || !clientSecret || !refreshToken) {
     console.warn('[gmail] Gmail credentials not fully set — Gmail integration disabled');
     return null;
   }
 
-  const auth = new google.auth.OAuth2(GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET);
-  auth.setCredentials({ refresh_token: GMAIL_REFRESH_TOKEN });
+  const auth = new google.auth.OAuth2(clientId, clientSecret);
+  auth.setCredentials({ refresh_token: refreshToken });
   return auth;
 }
 

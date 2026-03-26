@@ -3,7 +3,8 @@
 // env loading → DB row → prompt assembly → execute → success/failure recording.
 // Agents never manage DB rows or error handling directly.
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
 import { spawn } from 'child_process';

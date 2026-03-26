@@ -3,7 +3,8 @@
 // routes alerts to the correct Discord channel, and batches info-level alerts.
 // Run with: node agents/cto-04-alerts/index.js
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import * as db from '../../shared/db.js';
 import {
   connectBot,
