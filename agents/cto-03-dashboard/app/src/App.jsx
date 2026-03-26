@@ -12,10 +12,12 @@ function getToken() {
   return params.get('token') || '';
 }
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, ''); // '/dashboard' or ''
+
 export function apiFetch(path) {
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
-  const url = token ? `${path}${sep}token=${token}` : path;
+  const url = token ? `${BASE}${path}${sep}token=${token}` : `${BASE}${path}`;
   return fetch(url).then(r => {
     if (!r.ok) throw new Error(`API ${r.status}: ${r.statusText}`);
     return r.json();
