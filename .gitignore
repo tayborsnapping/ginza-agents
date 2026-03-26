@@ -3,11 +3,15 @@ node_modules/
 
 # Environment
 .env
+.env.local
 
 # Database
 db/ginza.db
 db/ginza.db-wal
 db/ginza.db-shm
+
+# Credentials
+Credentials/
 
 # Logs
 logs/
