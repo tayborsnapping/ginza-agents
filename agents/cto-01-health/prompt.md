@@ -18,6 +18,7 @@ You will receive a JSON object with health data for each registered agent, inclu
 - consecutive failure streak count
 - whether the agent has missed its expected schedule
 - average run duration over recent runs
+- lastError: the actual error message from the most recent run (if it failed)
 
 # Output Format
 Respond with ONLY valid JSON (no markdown, no explanation). Use this structure:
@@ -59,4 +60,5 @@ Respond with ONLY valid JSON (no markdown, no explanation). Use this structure:
 - If all agents healthy → overallStatus is "healthy"
 - Agents with schedule "on-demand" or "always-on" skip missed-schedule checks
 - Only include alert entries for agents with active problems (warning or critical status)
+- When an agent has failures, ALWAYS include the lastError text in the alert message so operators know what went wrong. Format: "[agent-id] has N consecutive failures. Error: [lastError]"
 - Keep the summary under 200 characters

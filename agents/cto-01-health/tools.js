@@ -127,6 +127,10 @@ export function getHealthData(ctx) {
       missedSchedule = true;
     }
 
+    const lastError = lastRun?.status === 'failure' && lastRun?.error
+      ? lastRun.error.substring(0, 500)
+      : null;
+
     agents.push({
       id: entry.id,
       schedule: entry.schedule,
@@ -138,6 +142,7 @@ export function getHealthData(ctx) {
       missedSchedule,
       totalRuns: recentRuns.length,
       recentFailures: recentRuns.filter(r => r.status === 'failure').length,
+      lastError,
     });
   }
 
