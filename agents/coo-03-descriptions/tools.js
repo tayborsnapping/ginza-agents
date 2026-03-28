@@ -5,6 +5,7 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { getDetroitTime } from '../../shared/utils.js';
 import {
   getProduct,
   updateProduct as shopifyUpdateProduct,
@@ -204,7 +205,7 @@ function slugify(title) {
  * vendor, productType, tags, sku, price, barcode, quantity, cost.
  *
  * @param {Array} products - Product objects with description data
- * @param {string} [outputPath] - Optional custom path. Defaults to data/exports/shopify-import-YYYY-MM-DD.csv
+ * @param {string} [outputPath] - Optional custom path. Defaults to data/exports/shopify-import-YYYY-MM-DD-HHmm.csv
  * @returns {string} Absolute path to the generated CSV file
  */
 export function generateShopifyCSV(products, outputPath) {
@@ -212,8 +213,10 @@ export function generateShopifyCSV(products, outputPath) {
     mkdirSync(EXPORTS_DIR, { recursive: true });
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const filePath = outputPath || join(EXPORTS_DIR, `shopify-import-${today}.csv`);
+  // Include time to prevent same-day overwrites (e.g. shopify-import-2026-03-28-0814.csv)
+  const detroitNow = getDetroitTime(); // "YYYY-MM-DD HH:mm:ss"
+  const timestamp = detroitNow.slice(0, 10) + '-' + detroitNow.slice(11, 13) + detroitNow.slice(14, 16);
+  const filePath = outputPath || join(EXPORTS_DIR, `shopify-import-${timestamp}.csv`);
 
   const headers = [
     'Handle', 'Title', 'Body (HTML)', 'Vendor', 'Type', 'Tags', 'Published',

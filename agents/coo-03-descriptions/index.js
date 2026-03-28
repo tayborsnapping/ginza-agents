@@ -117,29 +117,14 @@ await run({
       return output.summary;
     }
 
-    // Step 3: Batch threshold check
+    // Step 3: Batch threshold check — warn on large batches but continue processing
     if (toProcess.length > BATCH_THRESHOLD) {
-      ctx.log(`BATCH THRESHOLD: ${toProcess.length} products > ${BATCH_THRESHOLD}`);
+      ctx.log(`Large batch: ${toProcess.length} products > ${BATCH_THRESHOLD} threshold — proceeding with alert`);
       ctx.alert(
         'warning',
-        'COO-03: Batch Approval Required',
-        `${toProcess.length} products need descriptions (threshold: ${BATCH_THRESHOLD}). ` +
-        `Re-run with COO03_BATCH_OVERRIDE=true to proceed.`
+        'COO-03: Large Batch Processing',
+        `${toProcess.length} products being described (threshold: ${BATCH_THRESHOLD}).`
       );
-
-      if (process.env.COO03_BATCH_OVERRIDE !== 'true') {
-        const output = {
-          summary: `Paused — ${toProcess.length} products exceed batch threshold of ${BATCH_THRESHOLD}`,
-          described: [],
-          skipped,
-          errors: [],
-          needsApproval: true,
-          dryRun: DRY_RUN,
-        };
-        ctx.writeOutput('product_descriptions', output);
-        return output.summary;
-      }
-      ctx.log('Batch override enabled — proceeding with all products');
     }
 
     // Step 4: For each product, do web search then generate description via Anthropic

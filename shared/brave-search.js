@@ -31,7 +31,7 @@ export async function webSearch(ctx, query, count = 3) {
     });
 
     if (!response.ok) {
-      ctx.log(`Brave Search returned ${response.status} for "${query}"`);
+      ctx.log(`[WARN] Brave Search HTTP ${response.status} for "${query}" — falling back to LLM-only`);
       return '';
     }
 
@@ -47,7 +47,7 @@ export async function webSearch(ctx, query, count = 3) {
     ctx.log(`Web search for "${query}": ${results.length} results`);
     return snippets;
   } catch (err) {
-    ctx.log(`Web search error for "${query}": ${err.message}`);
+    ctx.log(`[WARN] Web search failed for "${query}": ${err.message} — falling back to LLM-only`);
     return '';
   }
 }

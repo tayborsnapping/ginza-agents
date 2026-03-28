@@ -7,32 +7,85 @@ import { getOrders, pullProductCosts } from '../../shared/shopify.js';
 
 export { pullProductCosts };
 
+const DETROIT_TZ = 'America/Detroit';
+
 /**
- * Get the Wed-Sun business week boundaries.
+ * Get the current date components in Detroit timezone.
+ * Returns { year, month (1-based), day, dayOfWeek (0=Sun) }.
+ */
+function getDetroitDateParts() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: DETROIT_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+  }).formatToParts(now);
+
+  const get = (type) => parts.find(p => p.type === type)?.value;
+  const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+  return {
+    year: Number(get('year')),
+    month: Number(get('month')),
+    day: Number(get('day')),
+    dayOfWeek: weekdayMap[get('weekday')] ?? 0,
+  };
+}
+
+/**
+ * Create a Date representing midnight Detroit time for a given local date.
+ * Uses the UTC offset for that date in Detroit to anchor correctly.
+ */
+function detroitMidnight(year, month, day) {
+  // Create a rough date, then find the exact Detroit UTC offset for it
+  const rough = new Date(Date.UTC(year, month - 1, day, 12)); // noon UTC as anchor
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: DETROIT_TZ,
+    timeZoneName: 'shortOffset',
+  });
+  const offsetPart = formatter.formatToParts(rough).find(p => p.type === 'timeZoneName')?.value ?? 'GMT-5';
+  // Parse "GMT-4" or "GMT-5" → hours offset
+  const offsetMatch = offsetPart.match(/GMT([+-]\d+)/);
+  const offsetHours = offsetMatch ? Number(offsetMatch[1]) : -5;
+  // Midnight Detroit = midnight local = 00:00 + reverse offset in UTC
+  return new Date(Date.UTC(year, month - 1, day, -offsetHours, 0, 0));
+}
+
+/**
+ * Get the Wed-Sun business week boundaries in Detroit time.
  * Ginza is open Wed-Sun, closed Mon-Tue. The report runs Monday morning,
  * so "current week" = the most recently completed Wed-Sun.
  * Returns date ranges for current and previous business weeks plus labels.
  */
 function getBusinessWeekBounds() {
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const dayOfWeek = today.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const { year, month, day, dayOfWeek } = getDetroitDateParts();
 
   // Find the most recent past Sunday (last completed business day).
   // If today is Sunday, use the previous Sunday so we have a full week.
   const daysToLastSunday = dayOfWeek === 0 ? 7 : dayOfWeek;
-  const lastSunday = new Date(today.getTime() - daysToLastSunday * 24 * 60 * 60 * 1000);
 
-  // Current business week: Wednesday 00:00 UTC → Monday 00:00 UTC (end of Sunday)
-  const currentWed = new Date(lastSunday.getTime() - 4 * 24 * 60 * 60 * 1000);
-  const currentEnd = new Date(lastSunday.getTime() + 24 * 60 * 60 * 1000);
+  // Build dates relative to today in Detroit time
+  const todayMidnight = detroitMidnight(year, month, day);
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  const lastSunday = new Date(todayMidnight.getTime() - daysToLastSunday * DAY_MS);
+
+  // Current business week: Wednesday 00:00 Detroit → Monday 00:00 Detroit (end of Sunday)
+  const currentWed = new Date(lastSunday.getTime() - 4 * DAY_MS);
+  const currentEnd = new Date(lastSunday.getTime() + 1 * DAY_MS);
 
   // Previous business week: same shape, 7 days earlier
-  const prevSunday = new Date(lastSunday.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const prevWed = new Date(prevSunday.getTime() - 4 * 24 * 60 * 60 * 1000);
-  const prevEnd = new Date(prevSunday.getTime() + 24 * 60 * 60 * 1000);
+  const prevSunday = new Date(lastSunday.getTime() - 7 * DAY_MS);
+  const prevWed = new Date(prevSunday.getTime() - 4 * DAY_MS);
+  const prevEnd = new Date(prevSunday.getTime() + 1 * DAY_MS);
 
-  const fmt = (d) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+  // Format dates as Detroit local for labels
+  const fmt = (d) => {
+    const p = new Intl.DateTimeFormat('en-US', { timeZone: DETROIT_TZ, month: 'numeric', day: 'numeric' }).formatToParts(d);
+    return `${p.find(x => x.type === 'month')?.value}/${p.find(x => x.type === 'day')?.value}`;
+  };
 
   return {
     current: { start: currentWed, end: currentEnd, label: `Week of ${fmt(currentWed)} - ${fmt(lastSunday)}` },

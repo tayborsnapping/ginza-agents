@@ -50,9 +50,15 @@ export async function callAnthropic({ systemPrompt, userMessage, maxTokens = DEF
       return { content, tokensIn, tokensOut };
     } catch (error) {
       lastError = error;
+      // Only retry on rate limits (429), server errors (5xx), or network errors (no status)
+      const status = error.status ?? error.statusCode;
+      const retryable = !status || status === 429 || status >= 500;
+      if (!retryable) {
+        throw new Error(`Anthropic API non-retryable error (${status}): ${error.message}`);
+      }
       if (attempt < MAX_RETRIES) {
         const delayMs = BASE_DELAY_MS * Math.pow(2, attempt - 1); // 1s, 2s, 4s
-        console.warn(`[anthropic] Attempt ${attempt}/${MAX_RETRIES} failed: ${error.message}. Retrying in ${delayMs}ms...`);
+        console.warn(`[anthropic] Attempt ${attempt}/${MAX_RETRIES} failed (${status || 'network'}): ${error.message}. Retrying in ${delayMs}ms...`);
         await new Promise(r => setTimeout(r, delayMs));
       }
     }

@@ -1,19 +1,83 @@
 // agents/cto-01-health/tools.js — Health check functions
 // Queries agent_runs to build health data for all registered agents.
+// Agent registry is auto-derived from ecosystem.config.cjs so new agents
+// are automatically monitored without manual updates.
 
+import { createRequire } from 'module';
 import { getDetroitTime } from '../../shared/utils.js';
 
-// Known agent registry with expected schedules
-const AGENT_REGISTRY = [
-  { id: 'cto-01-health',       schedule: 'every-30-min', intervalMs: 30 * 60_000 },
-  { id: 'cto-03-dashboard',    schedule: 'always-on',    intervalMs: null },
-  { id: 'cto-04-alerts',       schedule: 'always-on',    intervalMs: null },
-  { id: 'coo-01-invoice',      schedule: 'daily-8am',    intervalMs: 24 * 60 * 60_000 },
-  { id: 'coo-02-shopify',      schedule: 'on-demand',    intervalMs: null },
-  { id: 'coo-03-descriptions', schedule: 'on-demand',    intervalMs: null },
-  { id: 'cfo-01-weekly',       schedule: 'monday-7am',   intervalMs: 7 * 24 * 60 * 60_000 },
-  { id: 'cfo-03-margin',       schedule: 'daily-6am',    intervalMs: 24 * 60 * 60_000 },
-];
+const require = createRequire(import.meta.url);
+const ecosystem = require('../../ecosystem.config.cjs');
+
+/**
+ * Parse a cron expression to estimate the interval in milliseconds.
+ * Handles common patterns: every-N-min, daily, weekly.
+ */
+function cronToIntervalMs(cronExpr) {
+  if (!cronExpr) return null;
+  const parts = cronExpr.split(/\s+/);
+  if (parts.length < 5) return null;
+
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+
+  // Weekly (specific day of week, e.g. "0 7 * * 1")
+  if (dayOfWeek !== '*') return 7 * 24 * 60 * 60_000;
+
+  // Daily (specific hour, e.g. "15 6 * * *")
+  if (hour !== '*') return 24 * 60 * 60_000;
+
+  // Sub-hourly (e.g. "5,35 * * * *" → every 30 min)
+  if (minute.includes(',')) {
+    const mins = minute.split(',').map(Number).sort((a, b) => a - b);
+    if (mins.length >= 2) {
+      const gap = mins[1] - mins[0];
+      return gap * 60_000;
+    }
+  }
+
+  // Every N minutes via */N
+  const stepMatch = minute.match(/^\*\/(\d+)$/);
+  if (stepMatch) return Number(stepMatch[1]) * 60_000;
+
+  // Hourly (minute is a number, hour is *)
+  if (hour === '*' && /^\d+$/.test(minute)) return 60 * 60_000;
+
+  return null;
+}
+
+/**
+ * Derive schedule label from a cron expression.
+ */
+function cronToScheduleLabel(cronExpr) {
+  if (!cronExpr) return null;
+  const parts = cronExpr.split(/\s+/);
+  const [minute, hour, , , dayOfWeek] = parts;
+
+  if (dayOfWeek !== '*') return `weekly`;
+  if (hour !== '*') return `daily-${hour}:${minute.padStart(2, '0')}`;
+  if (minute.includes(',') || minute.includes('/')) return `every-${cronToIntervalMs(cronExpr) / 60_000}-min`;
+  return 'hourly';
+}
+
+// Auto-derive agent registry from ecosystem.config.cjs
+const AGENT_REGISTRY = ecosystem.apps.map(app => {
+  const hasCron = !!app.cron_restart;
+  const isAlwaysOn = app.autorestart !== false && !hasCron;
+
+  let schedule, intervalMs;
+  if (hasCron) {
+    schedule = cronToScheduleLabel(app.cron_restart);
+    intervalMs = cronToIntervalMs(app.cron_restart);
+  } else if (isAlwaysOn) {
+    schedule = 'always-on';
+    intervalMs = null;
+  } else {
+    schedule = 'on-demand';
+    intervalMs = null;
+  }
+
+  return { id: app.name, schedule, intervalMs };
+});
 
 /**
  * Gather health data for all registered agents.

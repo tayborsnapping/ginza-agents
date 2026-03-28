@@ -21,32 +21,41 @@ module.exports = {
       script: 'agents/cto-01-health/index.js',
       cron_restart: '5,35 * * * *',   // Every 30 min (offset from agent schedules)
       autorestart: false,
+      max_restarts: 0,
+      kill_timeout: 300000,           // 5 min — SIGKILL if agent hangs
     },
     {
       name: 'cfo-01-weekly',
       script: 'agents/cfo-01-weekly-report/index.js',
       cron_restart: '0 7 * * 1',      // Monday 7:00 AM ET
       autorestart: false,
+      max_restarts: 0,
+      kill_timeout: 300000,
     },
     {
       name: 'cfo-03-margin',
       script: 'agents/cfo-03-margin-watch/index.js',
       cron_restart: '15 6 * * *',     // Daily 6:15 AM ET (offset from CFO-01 to avoid Shopify rate limits)
       autorestart: false,
+      max_restarts: 0,
+      kill_timeout: 300000,
     },
     {
       name: 'coo-01-invoice',
       script: 'agents/coo-01-invoice/index.js',
       cron_restart: '0 8 * * *',      // Daily 8:00 AM ET
       autorestart: false,
+      max_restarts: 0,
+      kill_timeout: 300000,
     },
     {
       name: 'coo-04-upc',
       script: 'agents/coo-04-upc/index.js',
       // Triggered by COO-01 completion (runner.triggerAgent), not cron
       autorestart: false,
+      kill_timeout: 300000,
       env: {
-        COO04_DRY_RUN: 'true',       // Default: dry-run mode ON
+        COO04_DRY_RUN: 'false',      // Production: live mode
       },
     },
     {
@@ -54,8 +63,9 @@ module.exports = {
       script: 'agents/coo-02-shopify-entry/index.js',
       // Triggered by COO-04 completion (runner.triggerAgent), not cron
       autorestart: false,
+      kill_timeout: 300000,
       env: {
-        COO02_DRY_RUN: 'true',       // Default: dry-run mode ON
+        COO02_DRY_RUN: 'false',      // Production: live mode
       },
     },
     {
@@ -63,8 +73,9 @@ module.exports = {
       script: 'agents/coo-03-descriptions/index.js',
       // Triggered by COO-02 completion (runner.triggerAgent), not cron
       autorestart: false,
+      kill_timeout: 300000,
       env: {
-        COO03_DRY_RUN: 'true',       // Default: dry-run mode ON
+        COO03_DRY_RUN: 'false',      // Production: live mode
       },
     },
   ],

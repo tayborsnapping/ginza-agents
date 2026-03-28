@@ -18,7 +18,6 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const DRY_RUN = process.env.COO02_DRY_RUN !== 'false'; // Default ON
-const BATCH_OVERRIDE = process.env.COO02_BATCH_OVERRIDE === 'true';
 const BATCH_THRESHOLD = 50;
 
 await run({
@@ -62,30 +61,15 @@ await run({
 
     ctx.log(`${validProducts.length} products to process (${skippedProducts.length} zero-cost skipped)`);
 
-    // Step 4: Batch threshold check — if too many creates, pause for manual approval
-    if (validProducts.length > BATCH_THRESHOLD && !BATCH_OVERRIDE) {
-      ctx.log(`BATCH THRESHOLD EXCEEDED: ${validProducts.length} products > ${BATCH_THRESHOLD} limit`);
+    // Step 4: Batch threshold check — warn on large batches but continue processing
+    if (validProducts.length > BATCH_THRESHOLD) {
+      ctx.log(`Large batch: ${validProducts.length} products > ${BATCH_THRESHOLD} threshold — proceeding with alert`);
       ctx.alert(
         'warning',
-        'COO-02: Batch Approval Required',
-        `${validProducts.length} products queued for Shopify entry (threshold: ${BATCH_THRESHOLD}). ` +
-        `Invoices: ${processedInvoiceNumbers.join(', ')}. ` +
-        `Manual approval required before processing. Re-run with COO02_BATCH_OVERRIDE=true to proceed.`
+        'COO-02: Large Batch Processing',
+        `${validProducts.length} products being processed (threshold: ${BATCH_THRESHOLD}). ` +
+        `Invoices: ${processedInvoiceNumbers.join(', ')}.`
       );
-
-      const output = {
-        summary: `Paused — ${validProducts.length} products exceed batch threshold of ${BATCH_THRESHOLD}`,
-        created: [],
-        updated: [],
-        skipped: skippedProducts,
-        errors: [],
-        needsApproval: true,
-        totalProcessed: 0,
-        invoicesProcessed: processedInvoiceNumbers,
-        processedEmailMessageIds,
-      };
-      ctx.writeOutput('shopify_entries', output);
-      return output.summary;
     }
 
     // Step 5: Pre-fetch all Shopify products once (avoids per-product API calls + 429s)

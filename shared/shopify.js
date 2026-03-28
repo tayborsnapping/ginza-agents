@@ -4,6 +4,7 @@
 // Gracefully throws descriptive errors if credentials are missing.
 
 import ShopifyApi from 'shopify-api-node';
+import { sleep } from './utils.js';
 
 const RATE_LIMIT = { calls: 2, interval: 1000 }; // 2 calls/second
 
@@ -165,14 +166,6 @@ export async function searchProductsByTitle(title) {
 export async function getLocations() {
   const shopify = getClient();
   return shopify.location.list();
-}
-
-/**
- * Sleep for a given number of milliseconds.
- * @param {number} ms
- */
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**

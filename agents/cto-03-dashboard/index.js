@@ -18,6 +18,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.DASHBOARD_PORT || '3737', 10);
 const TOKEN = process.env.DASHBOARD_TOKEN;
 
+// Anthropic pricing — update when model or pricing changes
+// Current: Claude Sonnet (claude-sonnet-4-20250514)
+const COST_PER_M_INPUT = 3;
+const COST_PER_M_OUTPUT = 15;
+
 const app = express();
 
 // --- Auth middleware ---
@@ -225,13 +230,12 @@ app.get('/api/stats', (req, res) => {
     ORDER BY date
   `).all();
 
-  // Cost estimate: Claude Sonnet pricing ($3/M input, $15/M output)
   const totalIn = tokenTotals?.totalTokensIn || 0;
   const totalOut = tokenTotals?.totalTokensOut || 0;
-  const estimatedCost = (totalIn / 1_000_000) * 3 + (totalOut / 1_000_000) * 15;
+  const estimatedCost = (totalIn / 1_000_000) * COST_PER_M_INPUT + (totalOut / 1_000_000) * COST_PER_M_OUTPUT;
   const weekIn = tokenWeek?.tokensIn || 0;
   const weekOut = tokenWeek?.tokensOut || 0;
-  const weekCost = (weekIn / 1_000_000) * 3 + (weekOut / 1_000_000) * 15;
+  const weekCost = (weekIn / 1_000_000) * COST_PER_M_INPUT + (weekOut / 1_000_000) * COST_PER_M_OUTPUT;
 
   // Alert counts by priority
   const alertsByPriority = db.prepare(`
@@ -251,7 +255,7 @@ app.get('/api/stats', (req, res) => {
     cost: {
       allTime: Math.round(estimatedCost * 100) / 100,
       last7Days: Math.round(weekCost * 100) / 100,
-      note: 'Estimated using Claude Sonnet pricing: $3/M input, $15/M output',
+      note: `Estimated using Claude Sonnet pricing: $${COST_PER_M_INPUT}/M input, $${COST_PER_M_OUTPUT}/M output`,
     },
     alerts: {
       byPriority: Object.fromEntries(alertsByPriority.map(a => [a.priority, a.count])),

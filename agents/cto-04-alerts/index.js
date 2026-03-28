@@ -83,12 +83,18 @@ function isDuplicate(alert) {
   return false;
 }
 
+const DEDUP_MAX_SIZE = 1000;
+
 function cleanupDedupCache() {
   const cutoff = Date.now() - DEDUP_WINDOW_MS;
   for (const [key, timestamp] of recentAlerts) {
     if (timestamp < cutoff) {
       recentAlerts.delete(key);
     }
+  }
+  // Hard cap to prevent unbounded memory growth in long-running process
+  if (recentAlerts.size > DEDUP_MAX_SIZE) {
+    recentAlerts.clear();
   }
 }
 
