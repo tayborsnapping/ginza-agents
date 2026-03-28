@@ -23,6 +23,7 @@ export default {
     Common columns: Product Name, Quantity, Unit Price (JPY), Total (JPY).
     Note: Exchange rate fluctuates. Flag all JPY invoices for manual exchange rate confirmation.
     Current approximate rate: ~150 JPY per 1 USD (but this MUST be confirmed manually).
+    If JAN codes (Japanese barcodes, 13 digits) appear, extract them as barcodes.
   `,
 
   markupRules: {

@@ -19,6 +19,7 @@ export default {
     Product descriptions include the product line (Pokemon, Magic, Yu-Gi-Oh, etc.).
     Look for "Invoice Total" at the bottom for the total.
     The invoice number and date are usually at the top of the document.
+    If UPC/EAN barcodes appear as a column or within product descriptions, extract them.
   `,
 
   markupRules: {
@@ -29,11 +30,15 @@ export default {
   },
 
   typeDetectionHints: `
+    IMPORTANT: Southern Hobby is a US distributor. ALL sealed TCG products from Southern Hobby are English-language unless explicitly labeled Japanese.
+
     Map products to Ginza's Shopify product types based on the description:
-    - Booster boxes, ETBs, collection boxes, tins, bundles → "TCG Sealed - English"
+    - Booster boxes, ETBs, collection boxes, tins, bundles, start decks, starter kits, league battle decks → "TCG Sealed - English"
+    - Hololive OCG, Weiss Schwarz, or any other TCG sold by Southern Hobby → "TCG Sealed - English" (US distributor = English edition)
     - Individual cards or "single" → match to game: "Single: Pokemon Eng", "Single: MTG", "Single: Yu-Gi-Oh", "Single: One Piece", "Single: Dragon Ball", etc.
     - Sleeves, binders, deck boxes, playmats, toploaders, card savers → "TCG Supplies"
-    - Figures, statues, figurines → "Figures"
+    - Gundam, Gunpla, model kits, HG, MG, RG, PG grade kits → "Model Kits" (most Gundam products are model kits)
+    - Metal Robot Spirits, Robot Spirits, action figures, statues, figurines → "Figures"
     - Plushes, plush toys → "Plushes"
     - Blind boxes, mystery boxes → "Blind Boxes"
   `,

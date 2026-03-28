@@ -41,9 +41,18 @@ module.exports = {
       autorestart: false,
     },
     {
+      name: 'coo-04-upc',
+      script: 'agents/coo-04-upc/index.js',
+      // Triggered by COO-01 completion (runner.triggerAgent), not cron
+      autorestart: false,
+      env: {
+        COO04_DRY_RUN: 'true',       // Default: dry-run mode ON
+      },
+    },
+    {
       name: 'coo-02-shopify',
       script: 'agents/coo-02-shopify-entry/index.js',
-      // Triggered by COO-01 completion (runner.triggerAgent), not cron
+      // Triggered by COO-04 completion (runner.triggerAgent), not cron
       autorestart: false,
       env: {
         COO02_DRY_RUN: 'true',       // Default: dry-run mode ON

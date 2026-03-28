@@ -179,13 +179,13 @@ await run({
       );
     }
 
-    // Step 8: Trigger COO-02 (Shopify Product Entry) to process the parsed data
+    // Step 8: Trigger COO-04 (UPC Lookup) to enrich products before Shopify entry
     try {
-      triggerAgent('coo-02-shopify-entry');
-      ctx.log('Triggered COO-02 (Shopify Product Entry)');
+      triggerAgent('coo-04-upc');
+      ctx.log('Triggered COO-04 (UPC Lookup)');
     } catch (triggerErr) {
-      ctx.log(`Warning: failed to trigger COO-02: ${triggerErr.message}`);
-      ctx.alert('warning', 'COO-02 Trigger Failed', `Could not auto-trigger COO-02: ${triggerErr.message}. Run manually.`);
+      ctx.log(`Warning: failed to trigger COO-04: ${triggerErr.message}`);
+      ctx.alert('warning', 'COO-04 Trigger Failed', `Could not auto-trigger COO-04: ${triggerErr.message}. Run manually.`);
     }
 
     // Return summary

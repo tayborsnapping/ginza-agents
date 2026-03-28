@@ -5,13 +5,17 @@
 
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
+import { existsSync } from 'fs';
 import * as db from '../../shared/db.js';
 import {
   connectBot,
   formatAlert,
   sendAlert,
   sendToChannel,
+  sendEmbed,
+  getChannelIdForAgent,
 } from '../../shared/discord.js';
+import { addLabel } from '../../shared/gmail.js';
 import { getDetroitTime } from '../../shared/utils.js';
 
 // --- Config ---
@@ -42,6 +46,26 @@ function markAlertSent(alertId) {
   db.getDb().prepare(`
     UPDATE alerts SET sent = 1, sent_at = ? WHERE id = ?
   `).run(new Date().toISOString(), alertId);
+}
+
+/** Read the latest output for a given key from agent_outputs. */
+function readAgentOutput(outputKey) {
+  const row = db.getDb().prepare(`
+    SELECT data FROM agent_outputs
+    WHERE output_key = ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(outputKey);
+  if (!row) return null;
+  try { return JSON.parse(row.data); } catch { return null; }
+}
+
+/** Write a new agent_output row. */
+function writeAgentOutput(agentId, outputKey, data) {
+  db.getDb().prepare(`
+    INSERT INTO agent_outputs (agent_id, output_key, data, created_at)
+    VALUES (?, ?, ?, ?)
+  `).run(agentId, outputKey, JSON.stringify(data), new Date().toISOString());
 }
 
 // --- Deduplication ---
@@ -88,6 +112,21 @@ async function processAlerts() {
     if (isDuplicate(alert)) {
       markAlertSent(alert.id);
       log(`Deduped: [${alert.source_agent}] ${alert.title}`);
+      continue;
+    }
+
+    // Special handling: COO-03 CSV Ready → send embed with CSV attachment
+    if (
+      alert.source_agent === 'coo-03-descriptions' &&
+      alert.title.includes('CSV Ready')
+    ) {
+      try {
+        await handleCSVReadyAlert(alert);
+        markAlertSent(alert.id);
+        log(`Sent CSV embed for: [${alert.source_agent}] ${alert.title}`);
+      } catch (err) {
+        log(`CSV embed failed: ${err.message} — will retry next cycle`);
+      }
       continue;
     }
 
@@ -143,6 +182,122 @@ async function flushInfoDigest() {
   log('Info digest sent');
 }
 
+// --- CSV Ready embed + ✅ confirmation ---
+
+async function handleCSVReadyAlert(alert) {
+  const descriptions = readAgentOutput('product_descriptions');
+  if (!descriptions) {
+    log('No product_descriptions output found — sending alert as plain text');
+    const formatted = formatAlert(alert);
+    await sendAlert(formatted);
+    return;
+  }
+
+  const channelId = getChannelIdForAgent('coo-03-descriptions');
+  if (!channelId) throw new Error('No channel configured for COO agents');
+
+  const fields = [
+    { name: 'Described', value: String(descriptions.described?.length || 0), inline: true },
+    { name: 'Skipped', value: String(descriptions.skipped?.length || 0), inline: true },
+    { name: 'Errors', value: String(descriptions.errors?.length || 0), inline: true },
+  ];
+  if (descriptions.invoicesProcessed?.length) {
+    fields.push({ name: 'Invoices', value: descriptions.invoicesProcessed.join(', '), inline: false });
+  }
+  if (descriptions.dryRun) {
+    fields.push({ name: 'Mode', value: '⚠️ DRY RUN — no Shopify changes made', inline: false });
+  }
+
+  const files = [];
+  if (descriptions.csvPath && existsSync(descriptions.csvPath)) {
+    files.push({ attachment: descriptions.csvPath, name: 'shopify-import.csv' });
+  }
+
+  const sent = await sendEmbed(channelId, {
+    title: '📦 Shopify Import Complete',
+    description: alert.message,
+    color: 0x00CC88,
+    fields,
+    footer: 'React ✅ to mark invoices as processed in Gmail',
+    files,
+  });
+
+  if (sent) {
+    writeAgentOutput('cto-04-alerts', 'pending_shopify_confirm', {
+      discordMessageId: sent.id,
+      channelId,
+      processedEmailMessageIds: descriptions.processedEmailMessageIds || [],
+      invoicesProcessed: descriptions.invoicesProcessed || [],
+      csvPath: descriptions.csvPath || null,
+      createdAt: new Date().toISOString(),
+    });
+    log(`Wrote pending_shopify_confirm (message ${sent.id})`);
+  }
+}
+
+function registerReactionListener(client) {
+  client.on('messageReactionAdd', async (reaction, user) => {
+    try {
+      // Skip bot's own reactions
+      if (user.id === client.user.id) return;
+
+      // Only care about ✅
+      if (reaction.emoji.name !== '✅') return;
+
+      // Fetch partials if needed (reactions on old messages)
+      if (reaction.partial) await reaction.fetch();
+      if (reaction.message.partial) await reaction.message.fetch();
+
+      const pending = readAgentOutput('pending_shopify_confirm');
+      if (!pending) return;
+
+      // Must match the tracked message
+      if (reaction.message.id !== pending.discordMessageId) return;
+
+      // Prevent double-confirm
+      const existing = readAgentOutput('shopify_confirmed');
+      if (existing && existing.discordMessageId === pending.discordMessageId) {
+        log('Already confirmed this import — ignoring duplicate ✅');
+        return;
+      }
+
+      log(`✅ received from ${user.username} — applying Gmail labels`);
+
+      const emailIds = pending.processedEmailMessageIds || [];
+      let labeled = 0;
+      for (const messageId of emailIds) {
+        try {
+          await addLabel(messageId, 'shopify-added');
+          labeled++;
+        } catch (err) {
+          log(`Failed to label email ${messageId}: ${err.message}`);
+        }
+      }
+
+      writeAgentOutput('cto-04-alerts', 'shopify_confirmed', {
+        discordMessageId: pending.discordMessageId,
+        confirmedBy: user.username,
+        confirmedAt: new Date().toISOString(),
+        emailsLabeled: labeled,
+        totalEmails: emailIds.length,
+        invoicesProcessed: pending.invoicesProcessed,
+      });
+
+      const channel = await client.channels.fetch(pending.channelId);
+      await channel.send(
+        `✅ Done — labeled ${labeled}/${emailIds.length} emails as \`shopify-added\` in Gmail. ` +
+        `Invoices: ${pending.invoicesProcessed?.join(', ') || 'none'}`
+      );
+
+      log(`Confirmed: ${labeled}/${emailIds.length} emails labeled, confirmed by ${user.username}`);
+    } catch (err) {
+      log(`Reaction handler error: ${err.message}`);
+    }
+  });
+
+  log('Registered ✅ reaction listener for Shopify confirmation');
+}
+
 // --- Main ---
 
 async function main() {
@@ -155,6 +310,9 @@ async function main() {
   }
 
   log(`Bot online as ${client.user.tag}`);
+
+  // Register ✅ reaction listener for Shopify import confirmation
+  registerReactionListener(client);
 
   // Poll for alerts every 30s
   setInterval(async () => {

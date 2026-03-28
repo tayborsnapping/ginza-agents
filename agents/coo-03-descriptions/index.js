@@ -9,12 +9,14 @@ import { fileURLToPath } from 'url';
 import { run } from '../../shared/runner.js';
 import {
   readShopifyEntries,
+  readShopifyEntriesMetadata,
   getProductDetails,
   webSearch,
   buildSearchQuery,
   updateProductDescription,
   shouldSkipProductType,
   hasExistingDescription,
+  generateShopifyCSV,
 } from './tools.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -219,7 +221,16 @@ await run({
           shopifyId: product.shopifyId,
           title: product.title,
           productType: product.productType,
+          vendor: product.vendor,
+          tags: product.tags,
+          sku: product.sku,
+          price: product.price,
+          quantity: product.quantity,
+          barcode: product.barcode,
+          cost: product.cost,
+          bodyHtml: descriptionData.bodyHtml,
           seoTitle: descriptionData.seoTitle,
+          seoDescription: descriptionData.seoDescription,
           bodyHtmlPreview: descriptionData.bodyHtml.replace(/<[^>]+>/g, '').substring(0, 100),
         });
 
@@ -234,7 +245,21 @@ await run({
       }
     }
 
-    // Step 5: Build output
+    // Step 5: Generate Shopify import CSV from described products
+    let csvPath = null;
+    if (described.length > 0) {
+      try {
+        csvPath = generateShopifyCSV(described);
+        ctx.log(`Generated Shopify CSV: ${csvPath} (${described.length} products)`);
+      } catch (csvErr) {
+        ctx.log(`Warning: CSV generation failed: ${csvErr.message}`);
+      }
+    }
+
+    // Step 5b: Read pipeline metadata from COO-02's output
+    const shopifyMeta = readShopifyEntriesMetadata(ctx);
+
+    // Step 6: Build output
     const output = {
       summary: `Described ${described.length}, skipped ${skipped.length}, errors ${errors.length}${DRY_RUN ? ' [DRY RUN]' : ''}`,
       described,
@@ -242,23 +267,26 @@ await run({
       errors,
       needsApproval: false,
       dryRun: DRY_RUN,
+      csvPath,
+      processedEmailMessageIds: shopifyMeta.processedEmailMessageIds,
+      invoicesProcessed: shopifyMeta.invoicesProcessed,
     };
 
     ctx.writeOutput('product_descriptions', output);
     ctx.log(`Output written: ${output.summary}`);
 
-    // Step 6: Alerts
+    // Step 7: Alerts — include CSV Ready indicator for CTO-04 to detect
     if (DRY_RUN) {
       ctx.alert(
         'info',
-        'COO-03: Dry Run Complete',
-        `${output.summary}. Set COO03_DRY_RUN=false to update Shopify for real.`
+        'COO-03: Descriptions & CSV Ready',
+        `${output.summary}. CSV: ${csvPath || 'none'}. Set COO03_DRY_RUN=false to update Shopify for real.`
       );
     } else {
       ctx.alert(
         'info',
-        'COO-03: Descriptions Generated',
-        output.summary
+        'COO-03: Descriptions & CSV Ready',
+        `${output.summary}. CSV: ${csvPath || 'none'}.`
       );
     }
 

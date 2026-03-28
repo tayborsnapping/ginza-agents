@@ -47,7 +47,7 @@ Return a JSON object with this structure:
 # Rules
 - Flag any product with zero or negative cost — mark the invoice as "needs_review"
 - Flag any invoice where the reported total doesn't match the sum of line items (>5% discrepancy)
-- Flag unknown product types that don't match Ginza's valid Shopify product types
+- Product types are auto-corrected before validation (fuzzy match → LLM classification → "Other"). Verify corrections look reasonable. Flag any that seem wrong.
 - If a JPY invoice is present, note the exchange rate assumption and flag for manual confirmation
 - Mark invoices as "approved" only if confidence is "high" and no critical issues
 - Mark as "needs_review" if confidence is "medium" or there are non-critical warnings

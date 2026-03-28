@@ -5,6 +5,12 @@
 import { createRequire } from 'module';
 import { listMessages, getMessage, getAttachment, addLabel } from '../../shared/gmail.js';
 import { parseJSON, stripCodeFences } from '../../shared/utils.js';
+import {
+  SHOPIFY_PRODUCT_TYPES,
+  isValidProductType,
+  fuzzyMatchProductType,
+  classifyProductType,
+} from '../../shared/product-types.js';
 import Papa from 'papaparse';
 
 const require = createRequire(import.meta.url);
@@ -17,16 +23,6 @@ import peachstate from './parsers/peachstate.js';
 import japaneseImports from './parsers/japanese-imports.js';
 
 const SUPPLIER_CONFIGS = [southernHobby, gts, peachstate, japaneseImports];
-
-// Ginza's full Shopify product type list — included in LLM parsing prompts
-const SHOPIFY_PRODUCT_TYPES = [
-  'Single: Pokemon Eng', 'Single: Pokemon Jp', 'Single: One Piece', 'Single: MTG',
-  'Single: Dragon Ball', 'Single: Yu-Gi-Oh', 'Single: Lorcana', 'Single: Flesh and Blood',
-  'Single: Union Arena', 'Single: Digimon', 'Single: Weiss Schwarz', 'Single: Vanguard',
-  'TCG Sealed - English', 'TCG Sealed - Japanese',
-  'TCG Supplies', 'Blind Boxes', 'Model Kits', 'Figures', 'Plushes',
-  'Apparel', 'Bags', 'Stickers', 'Pins', 'Food & Drink', 'Home Goods', 'Other',
-];
 
 /**
  * Query Gmail for unprocessed invoice emails.
@@ -215,6 +211,7 @@ Parse the following invoice data and return a JSON object with this exact struct
       "unitCost": 10.99,
       "extendedCost": 10.99,
       "productType": "One of Ginza's valid Shopify product types",
+      "barcode": "UPC/EAN barcode if visible in invoice data, or null",
       "notes": "Any relevant notes (e.g., pre-order, backorder, special edition)"
     }
   ],
@@ -230,6 +227,7 @@ Rules:
 - Every product MUST have title, quantity, unitCost, and productType
 - productType MUST be one of Ginza's valid Shopify product types listed above
 - If a product doesn't clearly map to a type, use "Other" and add a note
+- Extract UPC/EAN barcodes if they appear in the invoice (look for 12-13 digit numeric codes, columns labeled UPC/EAN/Barcode). Set barcode to null if not found.
 - unitCost is the per-unit cost FROM THE SUPPLIER (not retail price)
 - extendedCost = quantity * unitCost
 - Set confidence to "high" if the data is clear tabular data with all fields
@@ -265,8 +263,27 @@ ${extractedContent}`;
     if (p.unitCost <= 0) {
       warnings.push(`Product "${p.title}" has zero or negative cost: $${p.unitCost}`);
     }
-    if (!SHOPIFY_PRODUCT_TYPES.includes(p.productType)) {
-      warnings.push(`Product "${p.title}" has unknown product type: "${p.productType}"`);
+    // Type correction cascade: exact match → fuzzy match → LLM classification → "Other"
+    if (!isValidProductType(p.productType)) {
+      const original = p.productType;
+
+      // Tier 1: Fuzzy match
+      const fuzzyResult = fuzzyMatchProductType(p.productType);
+      if (fuzzyResult.match) {
+        p.productType = fuzzyResult.match;
+        warnings.push(`Auto-corrected type for "${p.title}": "${original}" → "${p.productType}" (fuzzy match, score=${fuzzyResult.score.toFixed(2)})`);
+      } else {
+        // Tier 2: LLM classification
+        try {
+          const classified = await classifyProductType(ctx, p.title, p.productType);
+          p.productType = classified;
+          warnings.push(`Auto-corrected type for "${p.title}": "${original}" → "${p.productType}" (LLM classification)`);
+        } catch (err) {
+          // Tier 3: Hard default
+          p.productType = 'Other';
+          warnings.push(`Failed to classify type for "${p.title}": "${original}" → defaulted to "Other" (${err.message})`);
+        }
+      }
     }
     validProducts.push(p);
   }

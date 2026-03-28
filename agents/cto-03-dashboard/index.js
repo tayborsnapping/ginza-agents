@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 dotenv.config({ override: true });
 
 import express from 'express';
+import { existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from '../../shared/db.js';
@@ -257,6 +258,120 @@ app.get('/api/stats', (req, res) => {
     },
     serverTime: getDetroitTime(),
   });
+});
+
+// --- Invoice pipeline endpoints ---
+
+/** Helper: read latest agent_output by key */
+function readOutput(key) {
+  const row = getDb().prepare(`
+    SELECT data, created_at FROM agent_outputs
+    WHERE output_key = ?
+    ORDER BY created_at DESC LIMIT 1
+  `).get(key);
+  if (!row) return null;
+  try { return { data: JSON.parse(row.data), createdAt: row.created_at }; } catch { return null; }
+}
+
+// GET /api/invoices — Invoice pipeline status overview
+app.get('/api/invoices', (req, res) => {
+  const parsed = readOutput('parsed_invoices');
+  const enriched = readOutput('enriched_invoices');
+  const shopify = readOutput('shopify_entries');
+  const descriptions = readOutput('product_descriptions');
+  const confirmed = readOutput('shopify_confirmed');
+
+  // Use enriched if available, else parsed
+  const invoiceSource = enriched || parsed;
+  if (!invoiceSource) {
+    return res.json({ invoices: [], summary: { total: 0 }, timestamps: {} });
+  }
+
+  const sourceData = invoiceSource.data;
+  const rawInvoices = sourceData.rawInvoices || [];
+
+  // Build validated status map
+  const validatedMap = new Map();
+  for (const inv of (sourceData.invoices || [])) {
+    validatedMap.set(`${inv.supplier}:${inv.invoiceNumber}`, inv);
+  }
+
+  // Build per-invoice status
+  const shopifyData = shopify?.data || {};
+  const descData = descriptions?.data || {};
+  const confirmedData = confirmed?.data || {};
+  const confirmedInvoices = new Set(confirmedData.invoicesProcessed || []);
+  const shopifyInvoices = new Set(shopifyData.invoicesProcessed || []);
+  const describedInvoices = new Set(descData.invoicesProcessed || []);
+
+  const invoices = rawInvoices.map(inv => {
+    const key = `${inv.supplier}:${inv.invoiceNumber}`;
+    const validated = validatedMap.get(key);
+    const approvalStatus = validated?.status || 'needs_review';
+
+    let pipelineStatus = 'parsed';
+    if (approvalStatus === 'approved') {
+      if (confirmedInvoices.has(inv.invoiceNumber)) {
+        pipelineStatus = 'confirmed';
+      } else if (describedInvoices.has(inv.invoiceNumber)) {
+        pipelineStatus = 'described';
+      } else if (shopifyInvoices.has(inv.invoiceNumber)) {
+        pipelineStatus = 'in_shopify';
+      } else {
+        pipelineStatus = 'approved';
+      }
+    } else if (approvalStatus === 'needs_review') {
+      pipelineStatus = 'needs_review';
+    } else {
+      pipelineStatus = approvalStatus;
+    }
+
+    return {
+      invoiceNumber: inv.invoiceNumber,
+      supplier: inv.supplier,
+      invoiceDate: inv.invoiceDate,
+      currency: inv.currency,
+      productCount: inv.products?.length || 0,
+      totalCost: inv.products?.reduce((sum, p) => sum + (p.unitCost || 0) * (p.quantity || 0), 0) || 0,
+      approvalStatus,
+      pipelineStatus,
+      confidence: validated?.confidence || null,
+    };
+  });
+
+  const summary = {
+    total: invoices.length,
+    confirmed: invoices.filter(i => i.pipelineStatus === 'confirmed').length,
+    described: invoices.filter(i => i.pipelineStatus === 'described').length,
+    inShopify: invoices.filter(i => i.pipelineStatus === 'in_shopify').length,
+    approved: invoices.filter(i => i.pipelineStatus === 'approved').length,
+    needsReview: invoices.filter(i => i.pipelineStatus === 'needs_review').length,
+  };
+
+  res.json({
+    invoices,
+    summary,
+    csvAvailable: !!(descData.csvPath && existsSync(descData.csvPath)),
+    timestamps: {
+      parsed: parsed?.createdAt || null,
+      enriched: enriched?.createdAt || null,
+      shopify: shopify?.createdAt || null,
+      descriptions: descriptions?.createdAt || null,
+      confirmed: confirmed?.createdAt || null,
+    },
+  });
+});
+
+// GET /api/invoices/csv — Download the Shopify import CSV
+app.get('/api/invoices/csv', (req, res) => {
+  const descriptions = readOutput('product_descriptions');
+  const csvPath = descriptions?.data?.csvPath;
+
+  if (!csvPath || !existsSync(csvPath)) {
+    return res.status(404).json({ error: 'No CSV available' });
+  }
+
+  res.download(csvPath, 'shopify-import.csv');
 });
 
 // POST /api/alerts/clear — Delete alerts from the database

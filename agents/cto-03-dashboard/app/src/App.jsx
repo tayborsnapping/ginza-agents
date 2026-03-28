@@ -3,8 +3,9 @@ import Dashboard from './pages/Dashboard.jsx';
 import AgentDetail from './pages/AgentDetail.jsx';
 import Alerts from './pages/Alerts.jsx';
 import Stats from './pages/Stats.jsx';
+import Invoices from './pages/Invoices.jsx';
 
-const TABS = ['dashboard', 'alerts', 'stats'];
+const TABS = ['dashboard', 'invoices', 'alerts', 'stats'];
 const REFRESH_INTERVAL = 30_000; // 30 seconds
 
 function getToken() {
@@ -70,7 +71,7 @@ export default function App() {
             className={`nav-btn ${tab === t ? 'active' : ''}`}
             onClick={() => { setTab(t); setSelectedAgent(null); }}
           >
-            {t === 'dashboard' ? 'Dashboard' : t === 'alerts' ? 'Alerts' : 'Stats'}
+            {t === 'dashboard' ? 'Dashboard' : t === 'invoices' ? 'Invoices' : t === 'alerts' ? 'Alerts' : 'Stats'}
           </button>
         ))}
       </nav>
@@ -80,6 +81,7 @@ export default function App() {
         {tab === 'agent-detail' && selectedAgent && (
           <AgentDetail agentId={selectedAgent} onBack={handleBack} />
         )}
+        {tab === 'invoices' && <Invoices />}
         {tab === 'alerts' && <Alerts />}
         {tab === 'stats' && <Stats />}
       </main>

@@ -20,6 +20,7 @@ export default {
     GTS carries a wide range of products — TCG, board games, figures, collectibles.
     The invoice number is usually referenced in the subject line or at the top of the document.
     Look for "Total" or "Grand Total" for the invoice total.
+    GTS invoices often include UPC/EAN barcodes — extract them if present.
   `,
 
   markupRules: {
@@ -32,12 +33,15 @@ export default {
   },
 
   typeDetectionHints: `
+    IMPORTANT: GTS is a US distributor. ALL sealed TCG products from GTS are English-language unless explicitly labeled Japanese.
+
     Map products to Ginza's Shopify product types based on the description:
-    - Booster boxes, ETBs, collection boxes, tins, bundles → "TCG Sealed - English"
+    - Booster boxes, ETBs, collection boxes, tins, bundles, start decks, starter kits, league battle decks → "TCG Sealed - English"
+    - Hololive OCG, Weiss Schwarz, or any other TCG sold by GTS → "TCG Sealed - English" (US distributor = English edition)
     - Individual cards or "single" → match to game: "Single: Pokemon Eng", "Single: MTG", "Single: Yu-Gi-Oh", "Single: One Piece", "Single: Dragon Ball", "Single: Lorcana", "Single: Flesh and Blood", "Single: Digimon", "Single: Weiss Schwarz", "Single: Vanguard"
     - Sleeves, binders, deck boxes, playmats → "TCG Supplies"
-    - Figures, statues → "Figures"
-    - Model kits, gunpla → "Model Kits"
+    - Gundam, Gunpla, model kits, HG, MG, RG, PG grade kits → "Model Kits" (most Gundam products are model kits)
+    - Metal Robot Spirits, Robot Spirits, action figures, statues, figurines → "Figures"
     - Plushes → "Plushes"
     - Blind boxes, mystery boxes → "Blind Boxes"
     - Board games, card games (non-TCG) → "Other"

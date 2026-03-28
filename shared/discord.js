@@ -3,7 +3,7 @@
 // Gracefully skips all operations if DISCORD_BOT_TOKEN is not set.
 // Agents never import discord.js directly — use ctx.alert() or this module.
 
-import { Client, GatewayIntentBits, EmbedBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, EmbedBuilder, Partials } from 'discord.js';
 
 // Maps agent ID prefixes to the env var holding the channel ID
 const PREFIX_TO_ENV = {
@@ -28,7 +28,12 @@ export async function connectBot() {
   }
 
   _client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildMessageReactions,
+    ],
+    partials: [Partials.Message, Partials.Reaction],
   });
 
   await new Promise((resolve, reject) => {
@@ -60,12 +65,13 @@ export async function sendToChannel(channelId, message) {
 /**
  * Send a rich embed message to a channel.
  * @param {string} channelId
- * @param {{ title: string, description: string, color: number, fields?: Array<{name, value, inline?}> }} opts
+ * @param {{ title: string, description: string, color: number, fields?: Array<{name, value, inline?}>, footer?: string, files?: Array }} opts
+ * @returns {import('discord.js').Message|null} The sent message, or null on failure.
  */
-export async function sendEmbed(channelId, { title, description, color, fields }) {
+export async function sendEmbed(channelId, { title, description, color, fields, footer, files }) {
   if (!_client) {
     console.warn('[discord] Bot not connected — skipping embed');
-    return;
+    return null;
   }
   try {
     const embed = new EmbedBuilder()
@@ -77,11 +83,19 @@ export async function sendEmbed(channelId, { title, description, color, fields }
     if (fields?.length) {
       embed.addFields(fields);
     }
+    if (footer) {
+      embed.setFooter({ text: footer });
+    }
 
     const channel = await _client.channels.fetch(channelId);
-    await channel.send({ embeds: [embed] });
+    const sent = await channel.send({
+      embeds: [embed],
+      ...(files?.length ? { files } : {}),
+    });
+    return sent;
   } catch (err) {
     console.error(`[discord] Failed to send embed to channel ${channelId}: ${err.message}`);
+    return null;
   }
 }
 

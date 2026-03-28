@@ -10,9 +10,18 @@ import {
   searchProductsByTitle,
   getLocations,
 } from '../../shared/shopify.js';
+import { isValidProductType } from '../../shared/product-types.js';
 
 // Cache for Shopify location ID (fetched once per run)
 let _primaryLocationId = null;
+
+// Cache for all Shopify products (fetched once per run for SKU dedup)
+let _allProductsCache = null;
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Delay between Shopify API calls to avoid 429s
+const API_DELAY_MS = 600;
 
 /**
  * Get the primary Shopify location ID (for inventory operations).
@@ -29,16 +38,25 @@ export async function getPrimaryLocationId(ctx) {
 }
 
 /**
- * Read the latest parsed_invoices output from COO-01 via agent_outputs.
- * Returns the full parsed data or null if none exists.
+ * Read invoice data — prefers enriched_invoices (from COO-04 with barcodes),
+ * falls back to parsed_invoices (from COO-01) for backward compatibility.
+ * Returns the full data or null if none exists.
  */
 export function readParsedInvoices(ctx) {
+  // Prefer enriched data (COO-04 adds barcodes)
+  const enriched = ctx.readOutput('enriched_invoices');
+  if (enriched) {
+    ctx.log(`Read enriched_invoices: ${enriched.rawInvoices?.length || 0} invoices, enriched at ${enriched.enrichedAt}`);
+    return enriched;
+  }
+
+  // Fall back to raw parsed data (if COO-04 was skipped or failed)
   const data = ctx.readOutput('parsed_invoices');
   if (!data) {
-    ctx.log('No parsed_invoices found in agent_outputs');
+    ctx.log('No invoice data found in agent_outputs (checked enriched_invoices and parsed_invoices)');
     return null;
   }
-  ctx.log(`Read parsed_invoices: ${data.rawInvoices?.length || 0} invoices, parsed at ${data.parsedAt}`);
+  ctx.log(`Read parsed_invoices (fallback): ${data.rawInvoices?.length || 0} invoices, parsed at ${data.parsedAt}`);
   return data;
 }
 
@@ -51,6 +69,7 @@ export function extractApprovedProducts(ctx, parsedData) {
   const products = [];
   const skippedInvoices = [];
   const processedInvoiceNumbers = [];
+  const processedEmailMessageIds = [];
 
   const validatedMap = new Map();
   for (const inv of (parsedData.invoices || [])) {
@@ -76,8 +95,16 @@ export function extractApprovedProducts(ctx, parsedData) {
     }
 
     processedInvoiceNumbers.push(rawInv.invoiceNumber);
+    if (rawInv.emailMessageId) {
+      processedEmailMessageIds.push(rawInv.emailMessageId);
+    }
 
     for (const product of (rawInv.products || [])) {
+      // Safety net: ensure product type is valid before Shopify entry
+      if (!isValidProductType(product.productType)) {
+        ctx.log(`Safety net: invalid type "${product.productType}" for "${product.title}" → defaulting to "Other"`);
+        product.productType = 'Other';
+      }
       products.push({
         ...product,
         supplier: rawInv.supplier,
@@ -89,40 +116,54 @@ export function extractApprovedProducts(ctx, parsedData) {
   }
 
   ctx.log(`Extracted ${products.length} products from ${processedInvoiceNumbers.length} approved invoices`);
-  return { products, skippedInvoices, processedInvoiceNumbers };
+  return { products, skippedInvoices, processedInvoiceNumbers, processedEmailMessageIds };
+}
+
+/**
+ * Pre-fetch and cache all Shopify products for dedup lookups.
+ * Called once at the start of a run to avoid repeated API calls.
+ */
+export async function prefetchProducts(ctx) {
+  if (_allProductsCache) return _allProductsCache;
+  ctx.log('Pre-fetching all Shopify products for dedup lookups');
+  try {
+    _allProductsCache = await getProducts({ fields: 'id,title,variants' });
+    ctx.log(`Cached ${_allProductsCache.length} existing Shopify products`);
+  } catch (err) {
+    ctx.log(`Warning: failed to pre-fetch products: ${err.message}`);
+    _allProductsCache = [];
+  }
+  return _allProductsCache;
 }
 
 /**
  * Check if a product already exists in Shopify by title or SKU.
+ * Uses the pre-fetched product cache — no extra API calls per product.
  * Returns { exists: boolean, product?: object, matchType?: 'title'|'sku' }
  */
 export async function checkExistingProduct(ctx, title, sku) {
-  // Search by title first (Shopify REST API exact match)
-  try {
-    const titleMatches = await searchProductsByTitle(title);
-    if (titleMatches.length > 0) {
-      ctx.log(`Found existing product by title: "${title}" (id=${titleMatches[0].id})`);
-      return { exists: true, product: titleMatches[0], matchType: 'title' };
+  // Ensure cache is loaded
+  const allProducts = _allProductsCache || await prefetchProducts(ctx);
+
+  // Search by title (case-insensitive)
+  const titleLower = title.toLowerCase().trim();
+  for (const product of allProducts) {
+    if (product.title && product.title.toLowerCase().trim() === titleLower) {
+      ctx.log(`Found existing product by title: "${title}" (id=${product.id})`);
+      return { exists: true, product, matchType: 'title' };
     }
-  } catch (err) {
-    ctx.log(`Title search error for "${title}": ${err.message}`);
   }
 
-  // If SKU provided, search all products for matching variant SKU
-  // This is expensive — only do it if title search failed and we have a SKU
+  // Search by SKU (case-insensitive)
   if (sku) {
-    try {
-      const allProducts = await getProducts({ fields: 'id,title,variants' });
-      for (const product of allProducts) {
-        for (const variant of (product.variants || [])) {
-          if (variant.sku && variant.sku.toLowerCase() === sku.toLowerCase()) {
-            ctx.log(`Found existing product by SKU "${sku}": "${product.title}" (id=${product.id})`);
-            return { exists: true, product, matchType: 'sku' };
-          }
+    const skuLower = sku.toLowerCase();
+    for (const product of allProducts) {
+      for (const variant of (product.variants || [])) {
+        if (variant.sku && variant.sku.toLowerCase() === skuLower) {
+          ctx.log(`Found existing product by SKU "${sku}": "${product.title}" (id=${product.id})`);
+          return { exists: true, product, matchType: 'sku' };
         }
       }
-    } catch (err) {
-      ctx.log(`SKU search error for "${sku}": ${err.message}`);
     }
   }
 
@@ -145,6 +186,7 @@ export async function createNewProduct(ctx, product, dryRun) {
     status: 'draft',
     variants: [{
       sku: product.sku || '',
+      barcode: product.barcode || '',
       price: String(product.suggestedRetail || 0),
       cost: String(product.unitCost || 0),
       inventory_management: 'shopify',
@@ -159,6 +201,7 @@ export async function createNewProduct(ctx, product, dryRun) {
     return { id: `dry-run-${Date.now()}`, title: product.title, variants: [{ sku: product.sku }] };
   }
 
+  await sleep(API_DELAY_MS);
   const created = await shopifyCreateProduct(productData);
   ctx.log(`Created product: "${created.title}" (id=${created.id})`);
   return created;
@@ -203,6 +246,7 @@ export async function updateExistingProduct(ctx, existingProduct, invoiceProduct
     if (invoiceProduct.unitCost) variantUpdate.cost = String(invoiceProduct.unitCost);
     if (invoiceProduct.suggestedRetail) variantUpdate.price = String(invoiceProduct.suggestedRetail);
 
+    await sleep(API_DELAY_MS);
     await shopifyUpdateProduct(existingProduct.id, {
       variants: [{ id: variant.id, ...variantUpdate }],
     });

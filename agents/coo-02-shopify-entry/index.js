@@ -9,6 +9,7 @@ import { run, triggerAgent } from '../../shared/runner.js';
 import {
   readParsedInvoices,
   extractApprovedProducts,
+  prefetchProducts,
   checkExistingProduct,
   createNewProduct,
   updateExistingProduct,
@@ -17,7 +18,8 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const DRY_RUN = process.env.COO02_DRY_RUN !== 'false'; // Default ON
-const BATCH_THRESHOLD = 20;
+const BATCH_OVERRIDE = process.env.COO02_BATCH_OVERRIDE === 'true';
+const BATCH_THRESHOLD = 50;
 
 await run({
   agentId: 'coo-02-shopify-entry',
@@ -33,7 +35,7 @@ await run({
     }
 
     // Step 2: Extract only approved products
-    const { products, skippedInvoices, processedInvoiceNumbers } = extractApprovedProducts(ctx, parsedData);
+    const { products, skippedInvoices, processedInvoiceNumbers, processedEmailMessageIds } = extractApprovedProducts(ctx, parsedData);
 
     if (products.length === 0) {
       const skipSummary = skippedInvoices.map(s => `${s.supplier} #${s.invoiceNumber}: ${s.reason}`).join('; ');
@@ -61,7 +63,7 @@ await run({
     ctx.log(`${validProducts.length} products to process (${skippedProducts.length} zero-cost skipped)`);
 
     // Step 4: Batch threshold check — if too many creates, pause for manual approval
-    if (validProducts.length > BATCH_THRESHOLD) {
+    if (validProducts.length > BATCH_THRESHOLD && !BATCH_OVERRIDE) {
       ctx.log(`BATCH THRESHOLD EXCEEDED: ${validProducts.length} products > ${BATCH_THRESHOLD} limit`);
       ctx.alert(
         'warning',
@@ -80,12 +82,16 @@ await run({
         needsApproval: true,
         totalProcessed: 0,
         invoicesProcessed: processedInvoiceNumbers,
+        processedEmailMessageIds,
       };
       ctx.writeOutput('shopify_entries', output);
       return output.summary;
     }
 
-    // Step 5: Process each product — dedup, create, or update
+    // Step 5: Pre-fetch all Shopify products once (avoids per-product API calls + 429s)
+    await prefetchProducts(ctx);
+
+    // Step 6: Process each product — dedup, create, or update
     const created = [];
     const updated = [];
     const errors = [];
@@ -141,6 +147,7 @@ await run({
         errors.push({
           title: product.title,
           sku: product.sku,
+          invoiceNumber: product.invoiceNumber,
           error: err.message,
         });
       }
@@ -156,6 +163,7 @@ await run({
       needsApproval: false,
       totalProcessed: created.length + updated.length,
       invoicesProcessed: processedInvoiceNumbers,
+      processedEmailMessageIds,
       dryRun: DRY_RUN,
     };
 

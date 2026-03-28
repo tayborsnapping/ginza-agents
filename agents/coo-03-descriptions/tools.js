@@ -2,10 +2,18 @@
 // Reads COO-02 output, fetches product details from Shopify, performs web search
 // for product context, and updates Shopify listings with generated descriptions.
 
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import {
   getProduct,
   updateProduct as shopifyUpdateProduct,
 } from '../../shared/shopify.js';
+import { webSearch } from '../../shared/brave-search.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = join(__dirname, '..', '..');
+const EXPORTS_DIR = join(PROJECT_ROOT, 'data', 'exports');
 
 // Product types that should be skipped (singles don't get descriptions)
 const SKIP_PREFIXES = ['Single:'];
@@ -50,55 +58,9 @@ export async function getProductDetails(ctx, shopifyId) {
   }
 }
 
-/**
- * Search the web for product information using Brave Search API.
- * Falls back gracefully if no API key is configured.
- * @param {object} ctx - Runner context
- * @param {string} query - Search query
- * @returns {string} Concatenated search snippets, or empty string if unavailable
- */
-export async function webSearch(ctx, query) {
-  const apiKey = process.env.BRAVE_SEARCH_API_KEY;
-  if (!apiKey) {
-    ctx.log('BRAVE_SEARCH_API_KEY not set — skipping web search, using AI knowledge only');
-    return '';
-  }
-
-  try {
-    const url = new URL('https://api.search.brave.com/res/v1/web/search');
-    url.searchParams.set('q', query);
-    url.searchParams.set('count', '3');
-    url.searchParams.set('text_decorations', 'false');
-
-    const response = await fetch(url.toString(), {
-      headers: {
-        'Accept': 'application/json',
-        'Accept-Encoding': 'gzip',
-        'X-Subscription-Token': apiKey,
-      },
-    });
-
-    if (!response.ok) {
-      ctx.log(`Brave Search returned ${response.status} for "${query}"`);
-      return '';
-    }
-
-    const data = await response.json();
-    const results = (data.web?.results || []).slice(0, 3);
-
-    if (results.length === 0) {
-      ctx.log(`No web results for "${query}"`);
-      return '';
-    }
-
-    const snippets = results.map(r => `${r.title}: ${r.description}`).join('\n');
-    ctx.log(`Web search for "${query}": ${results.length} results`);
-    return snippets;
-  } catch (err) {
-    ctx.log(`Web search error for "${query}": ${err.message}`);
-    return '';
-  }
-}
+// webSearch is now imported from shared/brave-search.js
+// Re-export for backward compatibility with COO-03's internal usage
+export { webSearch };
 
 /**
  * Build a search query for a product to find relevant details.
@@ -196,4 +158,108 @@ export function hasExistingDescription(product) {
   // Consider empty or whitespace-only HTML as no description
   const stripped = html.replace(/<[^>]+>/g, '').trim();
   return stripped.length > 20; // Ignore trivially short content
+}
+
+/**
+ * Read shopify_entries to get processedEmailMessageIds and invoicesProcessed.
+ * Used by COO-03 to carry forward pipeline metadata into its output.
+ */
+export function readShopifyEntriesMetadata(ctx) {
+  const data = ctx.readOutput('shopify_entries');
+  if (!data) return { processedEmailMessageIds: [], invoicesProcessed: [] };
+  return {
+    processedEmailMessageIds: data.processedEmailMessageIds || [],
+    invoicesProcessed: data.invoicesProcessed || [],
+  };
+}
+
+/**
+ * Escape a value for CSV — wraps in double quotes if it contains commas,
+ * quotes, or newlines. Internal double quotes are escaped as "".
+ */
+function csvEscape(value) {
+  if (value == null) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+/**
+ * Slugify a title into a Shopify-compatible handle.
+ */
+function slugify(title) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/**
+ * Generate a Shopify-format CSV from described products.
+ * Each product should have: title, bodyHtml, seoTitle, seoDescription,
+ * vendor, productType, tags, sku, price, barcode, quantity, cost.
+ *
+ * @param {Array} products - Product objects with description data
+ * @param {string} [outputPath] - Optional custom path. Defaults to data/exports/shopify-import-YYYY-MM-DD.csv
+ * @returns {string} Absolute path to the generated CSV file
+ */
+export function generateShopifyCSV(products, outputPath) {
+  if (!existsSync(EXPORTS_DIR)) {
+    mkdirSync(EXPORTS_DIR, { recursive: true });
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const filePath = outputPath || join(EXPORTS_DIR, `shopify-import-${today}.csv`);
+
+  const headers = [
+    'Handle', 'Title', 'Body (HTML)', 'Vendor', 'Type', 'Tags', 'Published',
+    'Option1 Name', 'Option1 Value', 'Variant SKU', 'Variant Grams',
+    'Variant Inventory Tracker', 'Variant Inventory Qty',
+    'Variant Inventory Policy', 'Variant Fulfillment Service',
+    'Variant Price', 'Variant Compare At Price', 'Variant Requires Shipping',
+    'Variant Taxable', 'Variant Barcode', 'Image Src', 'Image Position',
+    'Image Alt Text', 'SEO Title', 'SEO Description', 'Cost per item', 'Status',
+  ];
+
+  const rows = [headers.map(csvEscape).join(',')];
+
+  for (const p of products) {
+    const row = [
+      slugify(p.title || ''),
+      p.title || '',
+      p.bodyHtml || '',
+      p.vendor || '',
+      p.productType || '',
+      p.tags || '',
+      'TRUE',
+      'Title',                        // Option1 Name
+      'Default Title',                // Option1 Value
+      p.sku || '',
+      '',                             // Variant Grams
+      'shopify',                      // Variant Inventory Tracker
+      p.quantity || 0,
+      'deny',                         // Variant Inventory Policy
+      'manual',                       // Variant Fulfillment Service
+      p.price || 0,
+      '',                             // Variant Compare At Price
+      'TRUE',                         // Variant Requires Shipping
+      'TRUE',                         // Variant Taxable
+      p.barcode || '',
+      '',                             // Image Src
+      '',                             // Image Position
+      '',                             // Image Alt Text
+      p.seoTitle || '',
+      p.seoDescription || '',
+      p.cost || 0,
+      'draft',
+    ];
+    rows.push(row.map(csvEscape).join(','));
+  }
+
+  writeFileSync(filePath, rows.join('\n'), 'utf-8');
+  return filePath;
 }
